@@ -13,7 +13,6 @@ function editor(inElement, id) {
         editorEl.classList.add('editor')
         editorEl.setAttribute('id', id)
         editorEl.setAttribute('contenteditable', 'true')
-        editorEl.oninput = editorInputHandle
         editorEl.addEventListener('paste', editorPasteHandle)
     })
     editorEl.editorModel = {
@@ -100,18 +99,7 @@ function editorPasteHandle(e) {
     // TODO: implement paste and filtering of pasted content
 }
 
-/**
- * Turn the mutated content into operations
- * Undo mutations
- * //Turn off analyzing of mutations
- * Execute the operations
- * Turn on analyzing of mutations
- */
-
 function editorMutateHandle(editorEl, mutations, observer) {
-    //console.log(mutations)
-    //console.log(window.getSelection());
-
     editorEl.stopObservingMutations()
 
     const model = editorEl.editorModel
@@ -279,16 +267,3 @@ function executeOperations(editorEl, ops) {
 
     }
 }
-
-function editorInputHandle(e) {
-    //console.log(e)
-}
-
-function editorSelectionChangeHandle(e) {
-    // detect which editor
-
-    console.log(e)
-}
-
-
-
