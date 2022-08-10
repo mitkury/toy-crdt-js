@@ -30,7 +30,8 @@ class Editor extends EventTarget {
     editorEl = {}
     id = null
     counter = 0
-    elements = {}
+    domElements = {}
+    crdtNodes = {}
     operations = {}
     caret = null
     observer = null
@@ -109,47 +110,44 @@ class Editor extends EventTarget {
             if (mutation.type == 'childList') {
                 if (mutation.addedNodes.length > 0) {
                     for (var j = 0; j < mutation.addedNodes.length; j++) {
-                        let node = mutation.addedNodes[j]
+                        const node = mutation.addedNodes[j]
                         if (node.nodeType === 1) {
                             const parentId = node.parentNode != editorEl ?
                                 node.parentNode.getAttribute('data-id') :
                                 'root'
 
                             ops.push({
-                                id: `A@${this.counter}`,
+                                id: this.#getNewOperationId(),
                                 parentId: parentId,
                                 type: 'add',
                                 tagName: node.tagName,
 
                             })
-                            this.counter++
 
                             node.remove()
                         }
                         else if (node.nodeType === 3) {
                             if (node.parentNode.childNodes.length == 1) {
 
-                                const pId = `${this.id}@${this.counter}`
+                                const opIdNewP = this.#getNewOperationId()
                                 ops.push({
-                                    id: pId,
+                                    id: opIdNewP,
                                     parentId: 'root',
                                     type: 'add',
                                     tagName: 'p',
 
                                 })
-                                this.counter++
 
-                                const spanId = `${this.id}@${this.counter}`
+                                const opIdNewSpan = this.#getNewOperationId()
                                 ops.push({
-                                    id: spanId,
-                                    parentId: pId,
+                                    id: opIdNewSpan,
+                                    parentId: opIdNewP,
                                     type: 'add',
                                     tagName: 'span',
                                     text: String(node.textContent)
                                 })
-                                this.counter++
 
-                                targetCaret.leftId = spanId
+                                targetCaret.leftId = opIdNewSpan
 
                                 node.remove()
                             }
@@ -158,7 +156,19 @@ class Editor extends EventTarget {
 
                 }
                 else if (mutation.removedNodes.length > 0) {
-                    //console.log("Remove nodes")
+                    for (var j = 0; j < mutation.removedNodes.length; j++) {
+                        const node = mutation.removedNodes[j]
+                        const targetId = node.getAttribute('data-id')
+                        if (targetId) {
+                            ops.push({
+                                id: this.#getNewOperationId(),
+                                targetId: targetId,
+                                type: 'del'
+                            })
+                        } else {
+
+                        }
+                    }
                 } else {
                     //console.log("Something else")
                 }
@@ -183,7 +193,7 @@ class Editor extends EventTarget {
                     if (targetText.length > prevText.length) {
                         const newText = targetText.replace(prevText, '')
 
-                        const spanId = `${this.id}@${this.counter}`
+                        const spanId = this.#getNewOperationId()
                         ops.push({
                             id: spanId,
                             parentId: parentId,
@@ -193,13 +203,14 @@ class Editor extends EventTarget {
                             tagName: 'span',
                             text: String(newText)
                         })
-                        this.counter++
 
                         targetCaret.leftId = spanId
 
                         target.data = prevText
                     }
                 } else {
+
+                    
                     // TODO: delete?
                 }
             }
@@ -209,18 +220,46 @@ class Editor extends EventTarget {
 
         this.observeMutations()
 
-        if (targetCaret.leftId) {
-            const selection = window.getSelection()
-            const anchorNode = this.elements[targetCaret.leftId]
-            selection.setBaseAndExtent(anchorNode, 1, anchorNode, 1)
-        }
-
         this.dispatchEvent(new CustomEvent('operationsExecuted', { 
             detail: {
                 editorId: this.id,
                 operations: ops
             }
         }))
+
+        if (targetCaret.leftId) {
+            const selection = window.getSelection()
+
+            const nodeOnTheLeft = this.#getActualNodeOnTheLeft(targetCaret.leftId)
+
+            if (nodeOnTheLeft) {
+                const anchorNode = this.domElements[nodeOnTheLeft.id]
+                selection.setBaseAndExtent(anchorNode, 1, anchorNode, 1)
+            }
+        }
+    }
+
+    #getNewOperationId() {
+        const id= `${this.id}@${this.counter}`
+        this.counter++
+        return id
+    }
+
+    #getActualNodeOnTheLeft(nodeId) {
+        if (!nodeId) {
+            null
+        }
+
+        let targetNode = this.crdtNodes[nodeId]
+        if (targetNode && targetNode.deleted) {
+            if (targetNode.leftId) {
+                return this.#getActualNodeOnTheLeft(targetNode.leftId)
+            }
+
+            return null
+        }
+
+        return targetNode
     }
 
     #executeOperationsUnsafe(ops) {
@@ -234,9 +273,9 @@ class Editor extends EventTarget {
             const op = ops[i]
             try {
                 if (op.type == 'add') {
-                    const parentEl = op.parentId != 'root' ? this.elements[op.parentId] : null
-                    const leftEl = op.leftId ? this.elements[op.leftId] : null
-                    const rightEl = op.rightId ? this.elements[op.rightId] : null
+                    const parentEl = op.parentId != 'root' ? this.domElements[op.parentId] : null
+                    const leftEl = op.leftId ? this.domElements[op.leftId] : null
+                    const rightEl = op.rightId ? this.domElements[op.rightId] : null
 
                     const newEl = element(op.tagName, editorEl)
                     newEl.setAttribute('data-id', op.id)
@@ -256,11 +295,24 @@ class Editor extends EventTarget {
                         editorEl.appendChild(newEl)
                     }
 
-                    this.elements[op.id] = newEl
+                    this.domElements[op.id] = newEl
 
-                } else if (op.type == 'delete') {
-                    let el = mthis.elements[op.id]
-                    el.remove()
+                    this.crdtNodes[op.id] = {
+                        id: op.id,
+                        parentId: op.parentId,
+                        leftId: op.leftId,
+                        rightId: op.rightId,
+                        tagName: op.tagName,
+                        text: String(op.text),
+                        deleted: false,
+                    }
+
+                } else if (op.type == 'del') {
+                    const element = this.domElements[op.targetId]
+                    if (element) {
+                        element.remove()
+                        delete this.domElements[op.targetId]
+                    }
                 }
 
                 this.operations[op.id] = op
