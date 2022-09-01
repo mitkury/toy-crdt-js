@@ -15,6 +15,15 @@ function element(tagName, inElement, callback) {
     return newEl
 }
 
+function nodeHasDataId(nodes) {
+    for (var i = 0; i < nodes.length; i++) {
+        if (nodes[i].getAttribute('data-id')) {
+            return true
+        }
+    }
+
+    return false
+}
 
 class Editor extends EventTarget {
     
@@ -107,25 +116,54 @@ class Editor extends EventTarget {
         for (var i = 0; i < mutations.length; i++) {
             let mutation = mutations[i]
             let target = mutation.target
+            // A mutation on a tree of nodes
             if (mutation.type == 'childList') {
                 if (mutation.addedNodes.length > 0) {
                     for (var j = 0; j < mutation.addedNodes.length; j++) {
                         const node = mutation.addedNodes[j]
+                        // Element
                         if (node.nodeType === 1) {
-                            const parentId = node.parentNode != editorEl ?
-                                node.parentNode.getAttribute('data-id') :
-                                'root'
+                            if (node.parentNode && node.parentNode.tagName === 'SPAN') {
+                                // Put a new node outside of span that is used only for text node (a character)
+                                const parentId = node.parentNode.getAttribute('data-id')
+                                const targetParentId = this.crdtNodes[parentId].parentId
+                                const newNodeId = this.#getNewOperationId()
+                                
+                                ops.push({
+                                    id: newNodeId,
+                                    parentId: targetParentId,
+                                    leftId: parentId,
+                                    type: 'add',
+                                    tagName: node.tagName,
+                                })
 
-                            ops.push({
-                                id: this.#getNewOperationId(),
-                                parentId: parentId,
-                                type: 'add',
-                                tagName: node.tagName,
+                                targetCaret.leftId = newNodeId
+                            }
+                            else {
+                                // We don't add a span that is empty or doesn't have crdtNodes
+                                const makesSenseToAdd = node.tagName != 'SPAN' && !nodeHasDataId(node.childNodes);
 
-                            })
+                                if (makesSenseToAdd) {
+                                    const parentId = node.parentNode != editorEl ?
+                                    node.parentNode.getAttribute('data-id') :
+                                    'root'
+                                    const newNodeId = this.#getNewOperationId()
+    
+                                    ops.push({
+                                        id: newNodeId,
+                                        parentId: parentId,
+                                        type: 'add',
+                                        tagName: node.tagName,
+        
+                                    })
+
+                                    targetCaret.leftId = newNodeId
+                                }
+                            }
 
                             node.remove()
                         }
+                        // Text
                         else if (node.nodeType === 3) {
                             if (node.parentNode.childNodes.length == 1) {
 
@@ -172,6 +210,7 @@ class Editor extends EventTarget {
                 } else {
                     //console.log("Something else")
                 }
+            // A mutation on a CharacterData node (text was edited)
             } else if (mutation.type == 'characterData' && mutation.target.parentNode) {
                 const targetText = target.data
                 const targetId = target.parentNode.getAttribute('data-id')
