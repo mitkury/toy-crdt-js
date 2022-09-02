@@ -54,7 +54,38 @@ class Editor extends EventTarget {
             editorEl.classList.add('editor')
             editorEl.setAttribute('id', id)
             editorEl.setAttribute('contenteditable', 'true')
-            //editorEl.addEventListener('paste', editorPasteHandle)
+            editorEl.addEventListener('paste', this.#editorPasteHandle)
+            editorEl.addEventListener('keydown', e => {
+                if (e.key === 'Enter') {
+                    e.preventDefault()
+
+                    // Create a paragraph after a symbol where the caret is
+                    const selection = window.getSelection()
+                    const anchorNode = selection.anchorNode
+                    const anchorParentId = anchorNode.parentNode.getAttribute('data-id')
+                    const targetParentId = this.crdtNodes[anchorParentId].parentId
+                    const leftId = anchorParentId
+
+                    const newNodeId = this.#getNewOperationId()
+                    const ops = []
+                    ops.push({
+                        id: newNodeId,
+                        parentId: targetParentId,
+                        leftId: leftId,
+                        type: 'add',
+                        tagName: 'p',
+
+                    })
+
+                    this.executeOperations(ops);
+
+                    // Put the caret inside the new paragraph
+                    const newAnchorNode = this.domElements[newNodeId]
+                    // Insert white space inside the paragraph. Otherwise the caret doesn't want to go into a paragraph without a text node
+                    newAnchorNode.innerHTML = '\u200B'
+                    selection.setBaseAndExtent(newAnchorNode, 1, newAnchorNode, 1)
+                }    
+            })
         })
 
         this.observer = new MutationObserver((mutations, observer) =>
@@ -360,6 +391,10 @@ class Editor extends EventTarget {
             }
 
         }
+    }
+
+    #editorPasteHandle(e) {
+        e.preventDefault()
     }
 }
 
