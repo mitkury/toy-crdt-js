@@ -53,6 +53,7 @@ class Editor extends EventTarget {
         this.editorEl = div(inElement, editorEl => {
             editorEl.classList.add('editor')
             editorEl.setAttribute('id', id)
+            editorEl.setAttribute('data-id', 'root')
             editorEl.setAttribute('contenteditable', 'true')
             editorEl.addEventListener('paste', this.#editorPasteHandle)
             editorEl.addEventListener('keydown', e => {
@@ -62,7 +63,16 @@ class Editor extends EventTarget {
                     // Create a paragraph after a symbol where the caret is
                     const selection = window.getSelection()
                     const anchorNode = selection.anchorNode
-                    const anchorParentId = anchorNode.parentNode.getAttribute('data-id')
+
+                    let anchorParentId;
+                    // Text node (inside a node with 'data-id')
+                    if (anchorNode.nodeType === 3) {
+                        anchorParentId = anchorNode.parentNode.getAttribute('data-id')
+                    // Node with 'data-id'
+                    } else {
+                        anchorParentId = anchorNode.getAttribute('data-id')
+                    }
+                    
                     const targetParentId = this.crdtNodes[anchorParentId].parentId
                     const leftId = anchorParentId
 
@@ -73,15 +83,22 @@ class Editor extends EventTarget {
                         parentId: targetParentId,
                         leftId: leftId,
                         type: 'add',
-                        tagName: 'p',
+                        tagName: 'br',
 
                     })
 
                     this.executeOperations(ops);
 
+                    this.dispatchEvent(new CustomEvent('operationsExecuted', { 
+                        detail: {
+                            editorId: this.id,
+                            operations: ops
+                        }
+                    }))
+
                     // Put the caret inside the new paragraph
                     const newAnchorNode = this.domElements[newNodeId]
-                    // Insert white space inside the paragraph. Otherwise the caret doesn't want to go into a paragraph without a text node
+                    // Insert 'zero width space' in the paragraph. Otherwise the caret doesn't want to go into a paragraph without a text node
                     newAnchorNode.innerHTML = '\u200B'
                     selection.setBaseAndExtent(newAnchorNode, 1, newAnchorNode, 1)
                 }    
@@ -197,20 +214,10 @@ class Editor extends EventTarget {
                         // Text
                         else if (node.nodeType === 3) {
                             if (node.parentNode.childNodes.length == 1) {
-
-                                const opIdNewP = this.#getNewOperationId()
-                                ops.push({
-                                    id: opIdNewP,
-                                    parentId: 'root',
-                                    type: 'add',
-                                    tagName: 'p',
-
-                                })
-
                                 const opIdNewSpan = this.#getNewOperationId()
                                 ops.push({
                                     id: opIdNewSpan,
-                                    parentId: opIdNewP,
+                                    parentId: 'root',
                                     type: 'add',
                                     tagName: 'span',
                                     text: String(node.textContent)
@@ -343,7 +350,7 @@ class Editor extends EventTarget {
             const op = ops[i]
             try {
                 if (op.type == 'add') {
-                    const parentEl = op.parentId != 'root' ? this.domElements[op.parentId] : null
+                    const parentEl = op.parentId === 'root' ? this.editorEl : this.domElements[op.parentId]
                     const leftEl = op.leftId ? this.domElements[op.leftId] : null
                     const rightEl = op.rightId ? this.domElements[op.rightId] : null
 
