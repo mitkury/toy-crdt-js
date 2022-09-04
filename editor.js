@@ -26,7 +26,7 @@ function nodeHasDataId(nodes) {
 }
 
 class Editor extends EventTarget {
-    
+
     static #mutationConfig = {
         //attributes: true,
         childList: true,
@@ -68,40 +68,49 @@ class Editor extends EventTarget {
                     // Text node (inside a node with 'data-id')
                     if (anchorNode.nodeType === 3) {
                         anchorParentId = anchorNode.parentNode.getAttribute('data-id')
-                    // Node with 'data-id'
+                        // Node with 'data-id'
                     } else {
                         anchorParentId = anchorNode.getAttribute('data-id')
                     }
-                    
-                    const targetParentId = this.crdtNodes[anchorParentId].parentId
-                    const leftId = anchorParentId
 
-                    const newNodeId = this.#getNewOperationId()
+                    const anchorParentNode = this.crdtNodes[anchorParentId]
+                    const targetParentId = anchorParentNode.parentId
+                    const newBrId = this.#getNewOperationId()
+                    const newSpanId = this.#getNewOperationId()
                     const ops = []
                     ops.push({
-                        id: newNodeId,
+                        id: newBrId,
                         parentId: targetParentId,
-                        leftId: leftId,
+                        leftId: anchorParentId,
+                        rightId: newSpanId,
                         type: 'add',
                         tagName: 'br',
 
                     })
+                    ops.push({
+                        id: newSpanId,
+                        parentId: targetParentId,
+                        leftId: newBrId,
+                        rightId: anchorParentNode.rightId,
+                        type: 'add',
+                        tagName: 'span',
+                        // Insert 'zero width space' in the span. Otherwise the caret doesn't want to go into an element without a text node
+                        text: '\u200B'
+                    })
 
                     this.executeOperations(ops);
 
-                    this.dispatchEvent(new CustomEvent('operationsExecuted', { 
+                    this.dispatchEvent(new CustomEvent('operationsExecuted', {
                         detail: {
                             editorId: this.id,
                             operations: ops
                         }
                     }))
 
-                    // Put the caret inside the new paragraph
-                    const newAnchorNode = this.domElements[newNodeId]
-                    // Insert 'zero width space' in the paragraph. Otherwise the caret doesn't want to go into a paragraph without a text node
-                    newAnchorNode.innerHTML = '\u200B'
+                    // Put the caret inside the span element
+                    const newAnchorNode = this.domElements[newSpanId]
                     selection.setBaseAndExtent(newAnchorNode, 1, newAnchorNode, 1)
-                }    
+                }
             })
         })
 
@@ -164,19 +173,20 @@ class Editor extends EventTarget {
         for (var i = 0; i < mutations.length; i++) {
             let mutation = mutations[i]
             let target = mutation.target
-            // A mutation on a tree of nodes
+            // A mutation on a tree of nodes: addition and romoval of nodes
             if (mutation.type == 'childList') {
                 if (mutation.addedNodes.length > 0) {
                     for (var j = 0; j < mutation.addedNodes.length; j++) {
                         const node = mutation.addedNodes[j]
                         // Element
                         if (node.nodeType === 1) {
+                            // Adding an element inside a span node
                             if (node.parentNode && node.parentNode.tagName === 'SPAN') {
                                 // Put a new node outside of span that is used only for text node (a character)
                                 const parentId = node.parentNode.getAttribute('data-id')
                                 const targetParentId = this.crdtNodes[parentId].parentId
                                 const newNodeId = this.#getNewOperationId()
-                                
+
                                 ops.push({
                                     id: newNodeId,
                                     parentId: targetParentId,
@@ -187,22 +197,23 @@ class Editor extends EventTarget {
 
                                 targetCaret.leftId = newNodeId
                             }
+                            // Adding an element in any other kind of node
                             else {
                                 // We don't add a span that is empty or doesn't have crdtNodes
-                                const makesSenseToAdd = node.tagName != 'SPAN' && !nodeHasDataId(node.childNodes);
+                                const makesSenseToAdd = node.tagName != 'SPAN' && node.parentNode && !nodeHasDataId(node.childNodes);
 
                                 if (makesSenseToAdd) {
                                     const parentId = node.parentNode != editorEl ?
-                                    node.parentNode.getAttribute('data-id') :
-                                    'root'
+                                        node.parentNode.getAttribute('data-id') :
+                                        'root'
                                     const newNodeId = this.#getNewOperationId()
-    
+
                                     ops.push({
                                         id: newNodeId,
                                         parentId: parentId,
                                         type: 'add',
                                         tagName: node.tagName,
-        
+
                                     })
 
                                     targetCaret.leftId = newNodeId
@@ -231,7 +242,8 @@ class Editor extends EventTarget {
                     }
 
                 }
-                else if (mutation.removedNodes.length > 0) {
+
+                if (mutation.removedNodes.length > 0) {
                     for (var j = 0; j < mutation.removedNodes.length; j++) {
                         const node = mutation.removedNodes[j]
                         const targetId = node.getAttribute('data-id')
@@ -245,50 +257,71 @@ class Editor extends EventTarget {
 
                         }
                     }
-                } else {
-                    //console.log("Something else")
                 }
+
+            }
             // A mutation on a CharacterData node (text was edited)
-            } else if (mutation.type == 'characterData' && mutation.target.parentNode) {
+            else if (mutation.type == 'characterData' && mutation.target.parentNode) {
                 const targetText = target.data
                 const targetId = target.parentNode.getAttribute('data-id')
-                const parentId = target.parentNode.parentNode.getAttribute('data-id')
-                const prevText = mutation.oldValue
 
-                const selection = window.getSelection()
-                const anchorNode = selection.anchorNode
-                const anchorOffset = selection.anchorOffset
+                // If editing a text node in one of the existing op nodes
+                if (targetId != 'root') {
+                    const parentId = target.parentNode.parentNode.getAttribute('data-id')
+                    const prevText = mutation.oldValue
 
-                const insertOnTheRight = anchorNode == target && anchorOffset == target.length
+                    const selection = window.getSelection()
+                    const anchorNode = selection.anchorNode
+                    const anchorOffset = selection.anchorOffset
 
-                const targetOp = this.operations[targetId]
+                    const insertOnTheRight = anchorNode == target && anchorOffset == target.length
 
-                const leftId = insertOnTheRight ? targetId : targetOp.leftId
-                const rightId = insertOnTheRight ? targetOp.rightId : targetId
+                    const targetOp = this.operations[targetId]
 
-                if (targetText) {
-                    if (targetText.length > prevText.length) {
-                        const newText = targetText.replace(prevText, '')
+                    const leftId = insertOnTheRight ? targetId : targetOp.leftId
+                    const rightId = insertOnTheRight ? targetOp.rightId : targetId
 
-                        const spanId = this.#getNewOperationId()
-                        ops.push({
-                            id: spanId,
-                            parentId: parentId,
-                            leftId: leftId,
-                            rightId: rightId,
-                            type: 'add',
-                            tagName: 'span',
-                            text: String(newText)
-                        })
+                    if (targetText) {
+                        if (targetText.length > prevText.length) {
+                            const newText = targetText.replace(prevText, '')
 
-                        targetCaret.leftId = spanId
+                            const spanId = this.#getNewOperationId()
+                            ops.push({
+                                id: spanId,
+                                parentId: parentId,
+                                leftId: leftId,
+                                rightId: rightId,
+                                type: 'add',
+                                tagName: 'span',
+                                text: String(newText)
+                            })
 
-                        target.data = prevText
+                            targetCaret.leftId = spanId
+
+                            target.data = prevText
+                        }
+                    } else {
+                        // TODO: delete?
                     }
+                    // If editing a text node in the root
                 } else {
+                    const leftId = target.previousSibling ? target.previousSibling.getAttribute('data-id') : null
+                    const rightId = target.nextSibling ? target.nextSibling.getAttribute('data-id') : null
 
-                    
-                    // TODO: delete?
+                    const spanId = this.#getNewOperationId()
+                    ops.push({
+                        id: spanId,
+                        parentId: 'root',
+                        leftId: leftId,
+                        rightId: rightId,
+                        type: 'add',
+                        tagName: 'span',
+                        text: String(targetText)
+                    })
+
+                    targetCaret.leftId = spanId
+
+                    target.remove()
                 }
             }
         }
@@ -297,7 +330,7 @@ class Editor extends EventTarget {
 
         this.observeMutations()
 
-        this.dispatchEvent(new CustomEvent('operationsExecuted', { 
+        this.dispatchEvent(new CustomEvent('operationsExecuted', {
             detail: {
                 editorId: this.id,
                 operations: ops
@@ -317,7 +350,7 @@ class Editor extends EventTarget {
     }
 
     #getNewOperationId() {
-        const id= `${this.id}@${this.counter}`
+        const id = `${this.id}@${this.counter}`
         this.counter++
         return id
     }
@@ -418,7 +451,7 @@ editors[1].addEventListener('operationsExecuted', editorOperationsHandle)
 editors[2].addEventListener('operationsExecuted', editorOperationsHandle)
 
 function editorOperationsHandle(e) {
-    editors.forEach(editor => { 
+    editors.forEach(editor => {
         if (editor.id != e.detail.editorId) {
             editor.executeOperations(e.detail.operations)
         }
