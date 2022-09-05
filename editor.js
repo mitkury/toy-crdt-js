@@ -45,72 +45,113 @@ class Editor extends EventTarget {
     caret = null
     observer = null
 
+    #isOnline = true
+
+    getOnline() {
+        return this.#isOnline
+    }
+
+    setOnline(value) {
+        this.#isOnline = value
+
+        this.dispatchEvent(new CustomEvent('online', {
+            detail: {
+                online: value,
+                editorId: this.id
+            }
+        }))
+    }
+
     constructor(inElement, id) {
-        super();
+        super()
 
         this.id = id
 
-        this.editorEl = div(inElement, editorEl => {
-            editorEl.classList.add('editor')
-            editorEl.setAttribute('id', id)
-            editorEl.setAttribute('data-id', 'root')
-            editorEl.setAttribute('contenteditable', 'true')
-            editorEl.addEventListener('paste', this.#editorPasteHandle)
-            editorEl.addEventListener('keydown', e => {
-                if (e.key === 'Enter') {
-                    e.preventDefault()
+        div(inElement, containerEl => {
+            containerEl.classList.add('editor')
 
-                    // Create a paragraph after a symbol where the caret is
-                    const selection = window.getSelection()
-                    const anchorNode = selection.anchorNode
+            this.editorEl = div(containerEl, editorEl => {
+                editorEl.classList.add('content')
+                editorEl.setAttribute('id', id)
+                editorEl.setAttribute('data-id', 'root')
+                editorEl.setAttribute('contenteditable', 'true')
+                editorEl.addEventListener('paste', this.#editorPasteHandle)
+                editorEl.addEventListener('keydown', e => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault()
+                        // TODO: move to a separate function onNewLineCreations
 
-                    let anchorParentId;
-                    // Text node (inside a node with 'data-id')
-                    if (anchorNode.nodeType === 3) {
-                        anchorParentId = anchorNode.parentNode.getAttribute('data-id')
-                        // Node with 'data-id'
-                    } else {
-                        anchorParentId = anchorNode.getAttribute('data-id')
-                    }
+                        // Create a paragraph after a symbol where the caret is
+                        const selection = window.getSelection()
+                        const anchorNode = selection.anchorNode
 
-                    const anchorParentNode = this.crdtNodes[anchorParentId]
-                    const targetParentId = anchorParentNode.parentId
-                    const newBrId = this.#getNewOperationId()
-                    const newSpanId = this.#getNewOperationId()
-                    const ops = []
-                    ops.push({
-                        id: newBrId,
-                        parentId: targetParentId,
-                        leftId: anchorParentId,
-                        rightId: newSpanId,
-                        type: 'add',
-                        tagName: 'br',
-
-                    })
-                    ops.push({
-                        id: newSpanId,
-                        parentId: targetParentId,
-                        leftId: newBrId,
-                        rightId: anchorParentNode.rightId,
-                        type: 'add',
-                        tagName: 'span',
-                        // Insert 'zero width space' in the span. Otherwise the caret doesn't want to go into an element without a text node
-                        text: '\u200B'
-                    })
-
-                    this.executeOperations(ops);
-
-                    this.dispatchEvent(new CustomEvent('operationsExecuted', {
-                        detail: {
-                            editorId: this.id,
-                            operations: ops
+                        let anchorParentId;
+                        // Text node (inside a node with 'data-id')
+                        if (anchorNode.nodeType === 3) {
+                            anchorParentId = anchorNode.parentNode.getAttribute('data-id')
+                            // Node with 'data-id'
+                        } else {
+                            anchorParentId = anchorNode.getAttribute('data-id')
                         }
-                    }))
 
-                    // Put the caret inside the span element
-                    const newAnchorNode = this.domElements[newSpanId]
-                    selection.setBaseAndExtent(newAnchorNode, 1, newAnchorNode, 1)
-                }
+                        const anchorParentNode = this.crdtNodes[anchorParentId]
+                        const targetParentId = anchorParentNode.parentId
+                        const newBrId = this.#getNewOperationId()
+                        const newSpanId = this.#getNewOperationId()
+                        const ops = []
+                        ops.push({
+                            id: newBrId,
+                            parentId: targetParentId,
+                            leftId: anchorParentId,
+                            rightId: newSpanId,
+                            type: 'add',
+                            tagName: 'br',
+
+                        })
+                        ops.push({
+                            id: newSpanId,
+                            parentId: targetParentId,
+                            leftId: newBrId,
+                            rightId: anchorParentNode.rightId,
+                            type: 'add',
+                            tagName: 'span',
+                            // Insert 'zero width space' in the span. Otherwise the caret doesn't want to go into an element without a text node
+                            text: '\u200B'
+                        })
+
+                        this.executeOperations(ops)
+
+                        this.dispatchEvent(new CustomEvent('operationsExecuted', {
+                            detail: {
+                                editorId: this.id,
+                                operations: ops
+                            }
+                        }))
+
+                        // Put the caret inside the span element
+                        const newAnchorNode = this.domElements[newSpanId]
+                        selection.setBaseAndExtent(newAnchorNode, 1, newAnchorNode, 1)
+                    }
+                })
+            })
+
+            div(containerEl, controlsEl => {
+                controlsEl.classList.add('controls')
+
+                const checkbox = document.createElement('input')
+                const checkboxId = this.id + '-online'
+                checkbox.setAttribute('type', 'checkbox')
+                checkbox.setAttribute('id', checkboxId)
+                checkbox.setAttribute('checked', this.#isOnline)
+                checkbox.addEventListener('change', e => {
+                    this.setOnline(e.target.checked)
+                })
+                controlsEl.appendChild(checkbox)
+
+                const label = document.createElement('label')
+                label.textContent = 'online'
+                label.setAttribute('for', checkboxId)
+                controlsEl.appendChild(label)
             })
         })
 
@@ -200,7 +241,7 @@ class Editor extends EventTarget {
                             // Adding an element in any other kind of node
                             else {
                                 // We don't add a span that is empty or doesn't have crdtNodes
-                                const makesSenseToAdd = node.tagName != 'SPAN' && node.parentNode && !nodeHasDataId(node.childNodes);
+                                const makesSenseToAdd = node.tagName != 'SPAN' && node.parentNode && !nodeHasDataId(node.childNodes)
 
                                 if (makesSenseToAdd) {
                                     const parentId = node.parentNode != editorEl ?
@@ -446,14 +487,59 @@ const editors = [
     new Editor(mainContainerEl, 'C'),
 ]
 
-editors[0].addEventListener('operationsExecuted', editorOperationsHandle)
-editors[1].addEventListener('operationsExecuted', editorOperationsHandle)
-editors[2].addEventListener('operationsExecuted', editorOperationsHandle)
+editors.forEach(editor => {
+    editor.addEventListener('operationsExecuted', editorOperationsHandle)
+    editor.addEventListener('online', editorSetOnlineHandle)
+})
 
-function editorOperationsHandle(e) {
+function editorOperationsHandle(event) {
+    const executiveEditor = editors.find(editor => editor.id == event.detail.editorId)
+
+    if (!executiveEditor.getOnline()) {
+        return
+    }
+
     editors.forEach(editor => {
-        if (editor.id != e.detail.editorId) {
-            editor.executeOperations(e.detail.operations)
+        if (editor.id != executiveEditor && editor.getOnline()) {
+            editor.executeOperations(event.detail.operations)
         }
     })
+}
+
+function editorSetOnlineHandle(event) {
+    const { online, editorId } = event.detail
+
+    // Handle the editor going back online
+    if (!online) {
+        return
+    }
+
+    const currentEditor = editors.find(editor => editor.id == editorId)
+
+    // Sync changes from the editor that was online to its online peers
+    {
+        const ops = Object.values(currentEditor.operations)
+
+        editors.forEach(editor => {
+            if (editor.id != editorId) {
+                editor.executeOperations(ops)
+            }
+        })
+    }    
+
+    // Sync changes from online peers to the editor that was offline
+    {
+        let opsSet = {}
+
+        editors.forEach(editor => {
+            if (editor.id != editorId) {
+                opsSet = { ...editor.operations }
+            }
+        })
+
+        const ops = Object.values(opsSet)
+        
+        currentEditor.executeOperations(ops)
+    }
+
 }
