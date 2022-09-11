@@ -25,6 +25,89 @@ function nodeHasDataId(nodes) {
     return false
 }
 
+class OpId {
+    #peerId
+    #counter
+
+    static compare(opIdA, opIdB) {
+        const counterA = opIdA.getCounter()
+        const counterB = opIdB.getCounter()
+
+        if (counterA > counterB) {
+            return 1
+        }
+        else if (counterA < counterB) {
+            return -1
+        }
+        else {
+            const comparePeerId = opIdA.getPeerId().localeCompare(opIdB.getPeerId())
+            return comparePeerId
+        }
+    }
+
+    static equals(opIdA, opIdB) {
+        if (opIdA == null && opIdB == null) {
+            return true
+        }
+        else if (!opIdA || !opIdB) {
+            return false
+        }
+
+        return OpId.compare(opIdA, opIdB) == 0
+    }
+
+    static tryParseStr(opIdStr) {
+        if (!opIdStr) {
+            return null
+        }
+
+        if (opIdStr == 'root') {
+            return this.root()
+        }
+
+        const parts = opIdStr.split('@')
+
+        if (parts.length != 2) {
+            return null
+        }
+
+        return new OpId(parts[0], parts[1])
+    }
+
+    static root() {
+        return new OpId(0, '')
+    }
+
+    constructor(counter, peerId) {
+        this.#counter = counter
+        this.#peerId = peerId
+    }
+
+    isRoot() {
+        return this.#peerId === '' && this.#counter === 0
+    }
+
+    getPeerId() {
+        return this.#peerId
+    }
+
+    getCounter() {
+        return this.#counter
+    }
+
+    isGreaterThan(opId) {
+        return OpId.compare(this, opId) == 1
+    }
+
+    toString() {
+        if (this.isRoot()) {
+            return 'root'
+        }
+
+        return this.#counter + '@' + this.#peerId
+    }
+}
+
 class Editor extends EventTarget {
 
     static #mutationConfig = {
@@ -45,7 +128,7 @@ class Editor extends EventTarget {
     caret = null
     observer = null
 
-    #isOnline = true
+    #isOnline = false
 
     getOnline() {
         return this.#isOnline
@@ -81,21 +164,49 @@ class Editor extends EventTarget {
                         e.preventDefault()
                         // TODO: move to a separate function onNewLineCreations
 
-                        // Create a paragraph after a symbol where the caret is
                         const selection = window.getSelection()
                         const anchorNode = selection.anchorNode
+                        let anchorParentId
 
-                        let anchorParentId;
                         // Text node (inside a node with 'data-id')
                         if (anchorNode.nodeType === 3) {
-                            anchorParentId = anchorNode.parentNode.getAttribute('data-id')
+                            anchorParentId = OpId.tryParseStr(anchorNode.parentNode.getAttribute('data-id'))
                             // Node with 'data-id'
                         } else {
-                            anchorParentId = anchorNode.getAttribute('data-id')
+                            anchorParentId = OpId.tryParseStr(anchorNode.getAttribute('data-id'))
                         }
 
-                        const anchorParentNode = this.crdtNodes[anchorParentId]
-                        const targetParentId = anchorParentNode.parentId
+                        let targetParentId
+
+                        if (anchorParentId.isRoot()) {
+                            targetParentId = anchorParentId
+                        } else {
+                            targetParentId = this.crdtNodes[anchorParentId].parentId
+
+                            // In that case we insert the new line before the anchor
+                            if (selection.anchorOffset == 0) {
+                                if (anchorParentId) {
+                                    let targetNode = this.crdtNodes[anchorParentId]
+                                    while (true) {
+                                        if (!targetNode.leftId) {
+                                            targetNode = null
+                                            break
+                                        }
+
+                                        targetNode = this.crdtNodes[targetNode.leftId]
+
+                                        // If the node is deleted - we continue the search. 
+                                        // Otherwise - we found the active node on the left
+                                        if (!targetNode.deleted) {
+                                            break
+                                        }
+                                    }
+
+                                    anchorParentId = targetNode ? targetNode.id : null
+                                }
+                            }
+                        }
+
                         const newBrId = this.#getNewOperationId()
                         const newSpanId = this.#getNewOperationId()
                         const ops = []
@@ -103,7 +214,7 @@ class Editor extends EventTarget {
                             id: newBrId,
                             parentId: targetParentId,
                             leftId: anchorParentId,
-                            rightId: newSpanId,
+                            //rightId: newSpanId,
                             type: 'add',
                             tagName: 'br',
 
@@ -112,7 +223,7 @@ class Editor extends EventTarget {
                             id: newSpanId,
                             parentId: targetParentId,
                             leftId: newBrId,
-                            rightId: anchorParentNode.rightId,
+                            //rightId: anchorParentNode.rightId,
                             type: 'add',
                             tagName: 'span',
                             // Insert 'zero width space' in the span. Otherwise the caret doesn't want to go into an element without a text node
@@ -142,7 +253,7 @@ class Editor extends EventTarget {
                 const checkboxId = this.id + '-online'
                 checkbox.setAttribute('type', 'checkbox')
                 checkbox.setAttribute('id', checkboxId)
-                checkbox.setAttribute('checked', this.#isOnline)
+                checkbox.checked = this.#isOnline
                 checkbox.addEventListener('change', e => {
                     this.setOnline(e.target.checked)
                 })
@@ -156,7 +267,7 @@ class Editor extends EventTarget {
         })
 
         this.observer = new MutationObserver((mutations, observer) =>
-            this.#editorMutateHandle(mutations, observer)
+            this.#editorMutationHandle(mutations, observer)
         )
 
         document.addEventListener('selectionchange', e => {
@@ -202,7 +313,7 @@ class Editor extends EventTarget {
         this.observeMutations()
     }
 
-    #editorMutateHandle(mutations, observer) {
+    #editorMutationHandle(mutations, observer) {
         const editorEl = this.editorEl;
 
         this.stopObservingMutations()
@@ -224,7 +335,7 @@ class Editor extends EventTarget {
                             // Adding an element inside a span node
                             if (node.parentNode && node.parentNode.tagName === 'SPAN') {
                                 // Put a new node outside of span that is used only for text node (a character)
-                                const parentId = node.parentNode.getAttribute('data-id')
+                                const parentId = OpId.tryParseStr(node.parentNode.getAttribute('data-id'))
                                 const targetParentId = this.crdtNodes[parentId].parentId
                                 const newNodeId = this.#getNewOperationId()
 
@@ -232,6 +343,7 @@ class Editor extends EventTarget {
                                     id: newNodeId,
                                     parentId: targetParentId,
                                     leftId: parentId,
+                                    //rightId: null,
                                     type: 'add',
                                     tagName: node.tagName,
                                 })
@@ -245,13 +357,15 @@ class Editor extends EventTarget {
 
                                 if (makesSenseToAdd) {
                                     const parentId = node.parentNode != editorEl ?
-                                        node.parentNode.getAttribute('data-id') :
-                                        'root'
+                                        OpId.tryParseStr(node.parentNode.getAttribute('data-id')) :
+                                        OpId.root()
                                     const newNodeId = this.#getNewOperationId()
 
                                     ops.push({
                                         id: newNodeId,
                                         parentId: parentId,
+                                        leftId: null,
+                                        //rightId: null,
                                         type: 'add',
                                         tagName: node.tagName,
 
@@ -270,6 +384,8 @@ class Editor extends EventTarget {
                                 ops.push({
                                     id: opIdNewSpan,
                                     parentId: 'root',
+                                    leftId: null,
+                                    //rightId: null,
                                     type: 'add',
                                     tagName: 'span',
                                     text: String(node.textContent)
@@ -287,7 +403,7 @@ class Editor extends EventTarget {
                 if (mutation.removedNodes.length > 0) {
                     for (var j = 0; j < mutation.removedNodes.length; j++) {
                         const node = mutation.removedNodes[j]
-                        const targetId = node.getAttribute('data-id')
+                        const targetId = OpId.tryParseStr(node.getAttribute('data-id'))
                         if (targetId) {
                             ops.push({
                                 id: this.#getNewOperationId(),
@@ -304,11 +420,11 @@ class Editor extends EventTarget {
             // A mutation on a CharacterData node (text was edited)
             else if (mutation.type == 'characterData' && mutation.target.parentNode) {
                 const targetText = target.data
-                const targetId = target.parentNode.getAttribute('data-id')
+                const targetId = OpId.tryParseStr(target.parentNode.getAttribute('data-id'))
 
                 // If editing a text node in one of the existing op nodes
-                if (targetId != 'root') {
-                    const parentId = target.parentNode.parentNode.getAttribute('data-id')
+                if (!targetId.isRoot()) {
+                    const parentId = OpId.tryParseStr(target.parentNode.parentNode.getAttribute('data-id'))
                     const prevText = mutation.oldValue
 
                     const selection = window.getSelection()
@@ -320,7 +436,7 @@ class Editor extends EventTarget {
                     const targetOp = this.operations[targetId]
 
                     const leftId = insertOnTheRight ? targetId : targetOp.leftId
-                    const rightId = insertOnTheRight ? targetOp.rightId : targetId
+                    //const rightId = insertOnTheRight ? targetOp.rightId : targetId
 
                     if (targetText) {
                         if (targetText.length > prevText.length) {
@@ -331,7 +447,7 @@ class Editor extends EventTarget {
                                 id: spanId,
                                 parentId: parentId,
                                 leftId: leftId,
-                                rightId: rightId,
+                                //rightId: rightId,
                                 type: 'add',
                                 tagName: 'span',
                                 text: String(newText)
@@ -344,17 +460,19 @@ class Editor extends EventTarget {
                     } else {
                         // TODO: delete?
                     }
-                    // If editing a text node in the root
-                } else {
-                    const leftId = target.previousSibling ? target.previousSibling.getAttribute('data-id') : null
-                    const rightId = target.nextSibling ? target.nextSibling.getAttribute('data-id') : null
+
+                }
+                // If editing a text node in the root
+                else {
+                    const leftId = target.previousSibling ? OpId.tryParseStr(target.previousSibling.getAttribute('data-id')) : null
+                    //const rightId = target.nextSibling ? OpId.tryParseStr(target.nextSibling.getAttribute('data-id')) : null
 
                     const spanId = this.#getNewOperationId()
                     ops.push({
                         id: spanId,
                         parentId: 'root',
                         leftId: leftId,
-                        rightId: rightId,
+                        //rightId: rightId,
                         type: 'add',
                         tagName: 'span',
                         text: String(targetText)
@@ -391,9 +509,8 @@ class Editor extends EventTarget {
     }
 
     #getNewOperationId() {
-        const id = `${this.id}@${this.counter}`
         this.counter++
-        return id
+        return new OpId(this.counter, this.id)
     }
 
     #getActualNodeOnTheLeft(nodeId) {
@@ -420,57 +537,79 @@ class Editor extends EventTarget {
             return
         }
 
-        for (var i = 0; i < ops.length; i++) {
-            const op = ops[i]
-            try {
-                if (op.type == 'add') {
-                    const parentEl = op.parentId === 'root' ? this.editorEl : this.domElements[op.parentId]
-                    const leftEl = op.leftId ? this.domElements[op.leftId] : null
-                    const rightEl = op.rightId ? this.domElements[op.rightId] : null
+        for (var opi = 0; opi < ops.length; opi++) {
+            const op = ops[opi]
 
-                    const newEl = element(op.tagName, editorEl)
-                    newEl.setAttribute('data-id', op.id)
-                    if (op.text) {
-                        newEl.innerText = op.text
+            if (op.type == 'add') {
+                const parentEl = op.parentId == 'root' ? this.editorEl : this.domElements[op.parentId]
+
+                //const rightEl = op.rightId ? this.domElements[op.rightId] : null
+
+                const nodesWithSameLeftId = []
+                Object.values(this.crdtNodes).forEach(node => {
+                    if (OpId.equals(node.leftId, op.leftId)) {
+                        nodesWithSameLeftId.push(node)
                     }
-                    if (parentEl) {
-                        if (rightEl) {
-                            parentEl.insertBefore(newEl, rightEl)
-                        }
-                        else if (leftEl && leftEl.nextSibling) {
-                            parentEl.insertBefore(newEl, leftEl.nextSibling)
-                        } else {
-                            parentEl.appendChild(newEl)
-                        }
-                    } else {
-                        editorEl.appendChild(newEl)
-                    }
+                })
 
-                    this.domElements[op.id] = newEl
+                // Sort from high to low. Highest ID goes in front
+                nodesWithSameLeftId.sort((a, b) => {
+                    return OpId.compare(b.id, a.id)
+                })
 
-                    this.crdtNodes[op.id] = {
-                        id: op.id,
-                        parentId: op.parentId,
-                        leftId: op.leftId,
-                        rightId: op.rightId,
-                        tagName: op.tagName,
-                        text: String(op.text),
-                        deleted: false,
-                    }
-
-                } else if (op.type == 'del') {
-                    const element = this.domElements[op.targetId]
-                    if (element) {
-                        element.remove()
-                        delete this.domElements[op.targetId]
+                let targetLeftId = op.leftId
+                for (var i = 0; i < nodesWithSameLeftId.length; i++) {
+                    const node = nodesWithSameLeftId[i]
+                    // Given that we sorted from high to low (e.g 9,5,2,1,0)
+                    // We take the first greatest ID as the target left
+                    if (node.id.isGreaterThan(op.id)) {
+                        targetLeftId = node.id
+                        //break
                     }
                 }
+                const leftEl = this.domElements[targetLeftId]
 
-                this.operations[op.id] = op
-            } catch (err) {
-                console.error(`Couldn't execute operation - ${op.type} ${op.id} because of ${err}`)
+                const newEl = element(op.tagName, editorEl)
+                newEl.setAttribute('data-id', op.id)
+
+                if (op.text) {
+                    newEl.innerText = op.text
+                }
+                if (parentEl) {
+                    /*
+                    if (rightEl) {
+                        parentEl.insertBefore(newEl, rightEl)
+                    }
+                    else */
+                    if (leftEl && leftEl.nextSibling) {
+                        parentEl.insertBefore(newEl, leftEl.nextSibling)
+                    } else {
+                        parentEl.prepend(newEl)
+                    }
+                } else {
+                    editorEl.appendChild(newEl)
+                }
+
+                this.domElements[op.id] = newEl
+
+                this.crdtNodes[op.id] = {
+                    id: op.id,
+                    parentId: op.parentId,
+                    leftId: op.leftId,
+                    //rightId: op.rightId,
+                    tagName: op.tagName,
+                    text: String(op.text),
+                    deleted: false,
+                }
+            } else if (op.type == 'del') {
+                const element = this.domElements[op.targetId]
+                if (element) {
+                    element.remove()
+                    delete this.domElements[op.targetId]
+                }
             }
 
+            this.operations[op.id] = op
         }
     }
 
@@ -500,7 +639,7 @@ function editorOperationsHandle(event) {
     }
 
     editors.forEach(editor => {
-        if (editor.id != executiveEditor && editor.getOnline()) {
+        if (editor.id != executiveEditor.id && editor.getOnline()) {
             editor.executeOperations(event.detail.operations)
         }
     })
@@ -516,29 +655,32 @@ function editorSetOnlineHandle(event) {
 
     const currentEditor = editors.find(editor => editor.id == editorId)
 
-    // Sync changes from the editor that was online to its online peers
+    // Sync changes from the editor that was offline to its online peers
     {
         const ops = Object.values(currentEditor.operations)
 
         editors.forEach(editor => {
-            if (editor.id != editorId) {
+            if (editor.id != editorId && editor.getOnline()) {
                 editor.executeOperations(ops)
             }
         })
-    }    
+    }
 
     // Sync changes from online peers to the editor that was offline
     {
         let opsSet = {}
 
         editors.forEach(editor => {
-            if (editor.id != editorId) {
-                opsSet = { ...editor.operations }
+            if (editor.id != editorId && editor.getOnline()) {
+                opsSet = {
+                    ...opsSet,
+                    ...editor.operations
+                }
             }
         })
 
         const ops = Object.values(opsSet)
-        
+
         currentEditor.executeOperations(ops)
     }
 
