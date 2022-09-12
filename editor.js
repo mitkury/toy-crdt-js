@@ -558,15 +558,41 @@ class Editor extends EventTarget {
                 })
 
                 let targetLeftId = op.leftId
+
+                // First find the origin leftId
                 for (var i = 0; i < nodesWithSameLeftId.length; i++) {
                     const node = nodesWithSameLeftId[i]
                     // Given that we sorted from high to low (e.g 9,5,2,1,0)
                     // We take the first greatest ID as the target left
                     if (node.id.isGreaterThan(op.id)) {
                         targetLeftId = node.id
-                        //break
                     }
                 }
+
+                // Then find whether there's any other nodes relying on that ID.
+                // In that case set target to the last node in the chain of nodes
+                if (targetLeftId != null) {
+                    const nodesAfterTargetLeftId = []
+                    while (true) {
+                        let found = false
+                        Object.values(this.crdtNodes).forEach(node => {
+                            if (OpId.equals(node.leftId, targetLeftId)) {
+                                nodesAfterTargetLeftId.push(node)
+                                targetLeftId = node.id
+                                found = true
+                            }
+                        })
+                        
+                        if (!found) {
+                            break
+                        }
+                    }
+                    
+                    if (nodesAfterTargetLeftId.length > 0) {
+                        targetLeftId = nodesAfterTargetLeftId[nodesAfterTargetLeftId.length - 1].id
+                    }
+                }
+
                 const leftEl = this.domElements[targetLeftId]
 
                 const newEl = element(op.tagName, editorEl)
