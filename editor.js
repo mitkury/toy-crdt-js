@@ -125,6 +125,9 @@ class Editor extends EventTarget {
     domElements = {}
     crdtNodes = {}
     operations = {}
+    #opsWithMissingLeftId = {}
+    #opsWithMissingParentId = {}
+    #delOpsWithMissingTargetId = {}
     caret = null
     observer = null
 
@@ -545,9 +548,32 @@ class Editor extends EventTarget {
 
                 //const rightEl = op.rightId ? this.domElements[op.rightId] : null
 
+                if (op.parentId != 'root' && !this.crdtNodes.hasOwnProperty(op.parentId)) {
+                    let arr = []
+                    if (this.#opsWithMissingParentId.hasOwnProperty(op.parentId)) {
+                        arr = this.#opsWithMissingParentId[op.parentId]
+                    }
+                    arr.push(op)
+
+                    this.#opsWithMissingParentId[op.parentId] = arr
+                    continue
+                }
+
+                if (op.leftId != null && !this.crdtNodes.hasOwnProperty(op.leftId)) {
+                    let arr = []
+                    if (this.#opsWithMissingLeftId.hasOwnProperty(op.leftId)) {
+                        arr = this.#opsWithMissingLeftId[op.leftId]
+                    }
+                    arr.push(op)
+
+                    this.#opsWithMissingLeftId[op.leftId] = arr
+
+                    continue
+                }
+
                 const nodesWithSameLeftId = []
                 Object.values(this.crdtNodes).forEach(node => {
-                    if (OpId.equals(node.leftId, op.leftId)) {
+                    if (!node.deleted && OpId.equals(node.leftId, op.leftId)) {
                         nodesWithSameLeftId.push(node)
                     }
                 })
@@ -576,24 +602,24 @@ class Editor extends EventTarget {
                     while (true) {
                         let found = false
                         Object.values(this.crdtNodes).forEach(node => {
-                            if (OpId.equals(node.leftId, targetLeftId)) {
+                            if (!node.deleted && OpId.equals(node.leftId, targetLeftId)) {
                                 nodesAfterTargetLeftId.push(node)
                                 targetLeftId = node.id
                                 found = true
                             }
                         })
-                        
+
                         if (!found) {
                             break
                         }
                     }
-                    
+
                     if (nodesAfterTargetLeftId.length > 0) {
                         targetLeftId = nodesAfterTargetLeftId[nodesAfterTargetLeftId.length - 1].id
                     }
                 }
 
-                const leftEl = this.domElements[targetLeftId]
+                const leftEl = targetLeftId ? this.domElements[targetLeftId] : null
 
                 const newEl = element(op.tagName, editorEl)
                 newEl.setAttribute('data-id', op.id)
@@ -627,7 +653,44 @@ class Editor extends EventTarget {
                     text: String(op.text),
                     deleted: false,
                 }
+
+                if (this.#opsWithMissingParentId.hasOwnProperty(op.id)) {
+                    const ops = this.#opsWithMissingParentId[op.id]
+                    if (ops && ops.length > 0) {
+                        this.#executeOperationsUnsafe(ops)
+                    }
+                }
+
+                if (this.#opsWithMissingLeftId.hasOwnProperty(op.id)) {
+                    const ops = this.#opsWithMissingLeftId[op.id]
+                    if (ops && ops.length > 0) {
+                        this.#executeOperationsUnsafe(ops)
+                    }
+                }
+
+                if (this.#delOpsWithMissingTargetId.hasOwnProperty(op.id)) {
+                    const ops = this.#delOpsWithMissingTargetId[op.id]
+                    if (ops && ops.length > 0) {
+                        this.#executeOperationsUnsafe(ops)
+                    }
+                }
             } else if (op.type == 'del') {
+
+                if (!this.crdtNodes.hasOwnProperty(op.targetId)) {
+                    let arr = []
+                    if (this.#delOpsWithMissingTargetId.hasOwnProperty(op.targetId)) {
+                        arr = this.#delOpsWithMissingTargetId[op.targetId]
+                    }
+                    arr.push(op)
+
+                    this.#delOpsWithMissingTargetId[op.targetId] = arr
+
+                    continue
+                }
+
+                const node = this.crdtNodes[op.targetId]
+                node.deleted = true
+
                 const element = this.domElements[op.targetId]
                 if (element) {
                     element.remove()
@@ -671,6 +734,24 @@ function editorOperationsHandle(event) {
     })
 }
 
+function shuffleArray_Test(array) {
+    let currentIndex = array.length, randomIndex;
+
+    // While there remain elements to shuffle.
+    while (currentIndex != 0) {
+
+        // Pick a remaining element.
+        randomIndex = Math.floor(Math.random() * currentIndex);
+        currentIndex--;
+
+        // And swap it with the current element.
+        [array[currentIndex], array[randomIndex]] = [
+            array[randomIndex], array[currentIndex]];
+    }
+
+    return array;
+}
+
 function editorSetOnlineHandle(event) {
     const { online, editorId } = event.detail
 
@@ -684,6 +765,8 @@ function editorSetOnlineHandle(event) {
     // Sync changes from the editor that was offline to its online peers
     {
         const ops = Object.values(currentEditor.operations)
+
+        shuffleArray_Test(ops)
 
         editors.forEach(editor => {
             if (editor.id != editorId && editor.getOnline()) {
@@ -706,6 +789,8 @@ function editorSetOnlineHandle(event) {
         })
 
         const ops = Object.values(opsSet)
+
+        shuffleArray_Test(ops)
 
         currentEditor.executeOperations(ops)
     }
