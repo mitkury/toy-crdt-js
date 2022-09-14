@@ -217,7 +217,7 @@ class Editor extends EventTarget {
                             id: newBrId,
                             parentId: targetParentId,
                             leftId: anchorParentId,
-                            //rightId: newSpanId,
+                            rightId: newSpanId,
                             type: 'add',
                             tagName: 'br',
 
@@ -227,6 +227,7 @@ class Editor extends EventTarget {
                             parentId: targetParentId,
                             leftId: newBrId,
                             //rightId: anchorParentNode.rightId,
+                            rightId: null,
                             type: 'add',
                             tagName: 'span',
                             // Insert 'zero width space' in the span. Otherwise the caret doesn't want to go into an element without a text node
@@ -338,15 +339,17 @@ class Editor extends EventTarget {
                             // Adding an element inside a span node
                             if (node.parentNode && node.parentNode.tagName === 'SPAN') {
                                 // Put a new node outside of span that is used only for text node (a character)
-                                const parentId = OpId.tryParseStr(node.parentNode.getAttribute('data-id'))
-                                const targetParentId = this.crdtNodes[parentId].parentId
+                                const leftId = OpId.tryParseStr(node.parentNode.getAttribute('data-id'))
+                                const leftNode = this.crdtNodes[leftId]
+                                const rightId = leftNode.rightId ? this.crdtNodes[leftNode.rightId].id : null
+                                const targetParentId = leftNode.parentId
                                 const newNodeId = this.#getNewOperationId()
 
                                 ops.push({
                                     id: newNodeId,
                                     parentId: targetParentId,
-                                    leftId: parentId,
-                                    //rightId: null,
+                                    leftId: leftId,
+                                    rightId: rightId,
                                     type: 'add',
                                     tagName: node.tagName,
                                 })
@@ -368,7 +371,7 @@ class Editor extends EventTarget {
                                         id: newNodeId,
                                         parentId: parentId,
                                         leftId: null,
-                                        //rightId: null,
+                                        rightId: null,
                                         type: 'add',
                                         tagName: node.tagName,
 
@@ -388,7 +391,7 @@ class Editor extends EventTarget {
                                     id: opIdNewSpan,
                                     parentId: 'root',
                                     leftId: null,
-                                    //rightId: null,
+                                    rightId: null,
                                     type: 'add',
                                     tagName: 'span',
                                     text: String(node.textContent)
@@ -423,10 +426,10 @@ class Editor extends EventTarget {
             // A mutation on a CharacterData node (text was edited)
             else if (mutation.type == 'characterData' && mutation.target.parentNode) {
                 const targetText = target.data
-                const targetId = OpId.tryParseStr(target.parentNode.getAttribute('data-id'))
+                const initNodeId = OpId.tryParseStr(target.parentNode.getAttribute('data-id'))
 
                 // If editing a text node in one of the existing op nodes
-                if (!targetId.isRoot()) {
+                if (!initNodeId.isRoot()) {
                     const parentId = OpId.tryParseStr(target.parentNode.parentNode.getAttribute('data-id'))
                     const prevText = mutation.oldValue
 
@@ -436,10 +439,10 @@ class Editor extends EventTarget {
 
                     const insertOnTheRight = anchorNode == target && anchorOffset == target.length
 
-                    const targetOp = this.operations[targetId]
+                    const initNode = this.crdtNodes[initNodeId]
 
-                    const leftId = insertOnTheRight ? targetId : targetOp.leftId
-                    //const rightId = insertOnTheRight ? targetOp.rightId : targetId
+                    const leftId = insertOnTheRight ? initNodeId : initNode.leftId
+                    const rightId = insertOnTheRight ? initNode.rightId : initNodeId
 
                     if (targetText) {
                         if (targetText.length > prevText.length) {
@@ -450,7 +453,7 @@ class Editor extends EventTarget {
                                 id: spanId,
                                 parentId: parentId,
                                 leftId: leftId,
-                                //rightId: rightId,
+                                rightId: rightId,
                                 type: 'add',
                                 tagName: 'span',
                                 text: String(newText)
@@ -468,14 +471,14 @@ class Editor extends EventTarget {
                 // If editing a text node in the root
                 else {
                     const leftId = target.previousSibling ? OpId.tryParseStr(target.previousSibling.getAttribute('data-id')) : null
-                    //const rightId = target.nextSibling ? OpId.tryParseStr(target.nextSibling.getAttribute('data-id')) : null
+                    const rightId = target.nextSibling ? OpId.tryParseStr(target.nextSibling.getAttribute('data-id')) : null
 
                     const spanId = this.#getNewOperationId()
                     ops.push({
                         id: spanId,
                         parentId: 'root',
                         leftId: leftId,
-                        //rightId: rightId,
+                        rightId: rightId,
                         type: 'add',
                         tagName: 'span',
                         text: String(targetText)
@@ -544,10 +547,9 @@ class Editor extends EventTarget {
             const op = ops[opi]
 
             if (op.type == 'add') {
-                const parentEl = op.parentId == 'root' ? this.editorEl : this.domElements[op.parentId]
 
-                //const rightEl = op.rightId ? this.domElements[op.rightId] : null
-
+                // First make sure that needed nodes already exist. If not then 
+                // save the operation for later, when a node appears
                 if (op.parentId != 'root' && !this.crdtNodes.hasOwnProperty(op.parentId)) {
                     let arr = []
                     if (this.#opsWithMissingParentId.hasOwnProperty(op.parentId)) {
@@ -571,55 +573,81 @@ class Editor extends EventTarget {
                     continue
                 }
 
-                const nodesWithSameLeftId = []
-                Object.values(this.crdtNodes).forEach(node => {
-                    if (!node.deleted && OpId.equals(node.leftId, op.leftId)) {
-                        nodesWithSameLeftId.push(node)
-                    }
-                })
-
-                // Sort from high to low. Highest ID goes in front
-                nodesWithSameLeftId.sort((a, b) => {
-                    return OpId.compare(b.id, a.id)
-                })
+                // The actual left ID of out soon to be node might be different to leftId inside the operation.
+                // That is because there might be other nodes standing before leftId.
+                // We need to find the right sibling for our new node based on node IDs.
 
                 let targetLeftId = op.leftId
 
-                // First find the origin leftId
-                for (var i = 0; i < nodesWithSameLeftId.length; i++) {
-                    const node = nodesWithSameLeftId[i]
-                    // Given that we sorted from high to low (e.g 9,5,2,1,0)
-                    // We take the first greatest ID as the target left
-                    if (node.id.isGreaterThan(op.id)) {
-                        targetLeftId = node.id
+                // An attempt to find the correct targetLeftId
+                {
+                    let startingNodeId = null
+
+                    // If targetLeftId is null then find the node that has leftId null.
+                    // There should be only 1 node with leftId == null.
+                    // We will start our search from the first node
+                    if (!targetLeftId) {
+                        const nodes = Object.values(this.crdtNodes)
+                        for (var i = 0; i < nodes.length; i++) {
+                            const node = nodes[i]
+                            if (node.leftId == null) {
+                                startingNodeId = node.id
+                                break
+                            }
+                        }
+                    }
+                    // If targetLeftId exists, then we should start the search from
+                    // its right node
+                    else if (this.crdtNodes[targetLeftId].rightId) {
+                        startingNodeId = this.crdtNodes[targetLeftId].rightId
+
+                    }
+
+                    // In that case we start the search from startingNodeId to the right
+                    // to find targetLeftId for the new node.
+                    // If startingNodeId == null - we will use the existing targetLeftId
+                    if (startingNodeId) {
+
+                        // Find nodes in between left and right id
+                        // If op.rightId is null then it will scan till the last node (rightId == null)
+                        while (true) {
+                            if (startingNodeId == op.rightId) {
+                                break
+                            }
+
+                            const node = this.crdtNodes[startingNodeId]
+                            if (!op.id.isGreaterThan(node.id)) {
+                                break
+                            }
+
+                            targetLeftId = node.id
+
+                            startingNodeId = node.rightId
+                        }
                     }
                 }
 
-                // Then find whether there's any other nodes relying on that ID.
-                // In that case set target to the last node in the chain of nodes
-                if (targetLeftId != null) {
-                    const nodesAfterTargetLeftId = []
+                let leftEl = null
+                // Try to get an element of a non-deleted node
+                if (targetLeftId) {
+                    const nonDeletedLeftId = targetLeftId
                     while (true) {
-                        let found = false
-                        Object.values(this.crdtNodes).forEach(node => {
-                            if (!node.deleted && OpId.equals(node.leftId, targetLeftId)) {
-                                nodesAfterTargetLeftId.push(node)
-                                targetLeftId = node.id
-                                found = true
-                            }
-                        })
+                        const node = this.crdtNodes[nonDeletedLeftId]
+                        if (!node.deleted) {
+                            break
+                        }
 
-                        if (!found) {
+                        nonDeletedLeftId = node.leftId
+
+                        if (!nonDeletedLeftId) {
                             break
                         }
                     }
 
-                    if (nodesAfterTargetLeftId.length > 0) {
-                        targetLeftId = nodesAfterTargetLeftId[nodesAfterTargetLeftId.length - 1].id
+                    if (nonDeletedLeftId) {
+                        leftEl = this.domElements[nonDeletedLeftId]
                     }
                 }
-
-                const leftEl = targetLeftId ? this.domElements[targetLeftId] : null
 
                 const newEl = element(op.tagName, editorEl)
                 newEl.setAttribute('data-id', op.id)
@@ -627,12 +655,10 @@ class Editor extends EventTarget {
                 if (op.text) {
                     newEl.innerText = op.text
                 }
+
+                const parentEl = op.parentId == 'root' ? this.editorEl : this.domElements[op.parentId]
+
                 if (parentEl) {
-                    /*
-                    if (rightEl) {
-                        parentEl.insertBefore(newEl, rightEl)
-                    }
-                    else */
                     if (leftEl && leftEl.nextSibling) {
                         parentEl.insertBefore(newEl, leftEl.nextSibling)
                     } else {
@@ -644,11 +670,28 @@ class Editor extends EventTarget {
 
                 this.domElements[op.id] = newEl
 
+                let targetRightId = null
+
+                // Update left and right nodes
+                if (targetLeftId) {
+                    const leftNode = this.crdtNodes[targetLeftId]
+
+                    if (leftNode.rightId) {
+                        const rightNode = this.crdtNodes[leftNode.rightId]
+                        // 1 leftId of the node on the right
+                        rightNode.leftId = op.id
+                        targetRightId = rightNode.id
+                    }
+
+                    // 2 rightId of the node on the left
+                    leftNode.rightId = op.id
+                }
+
                 this.crdtNodes[op.id] = {
                     id: op.id,
                     parentId: op.parentId,
-                    leftId: op.leftId,
-                    //rightId: op.rightId,
+                    leftId: targetLeftId,
+                    rightId: targetRightId,
                     tagName: op.tagName,
                     text: String(op.text),
                     deleted: false,
@@ -766,7 +809,7 @@ function editorSetOnlineHandle(event) {
     {
         const ops = Object.values(currentEditor.operations)
 
-        shuffleArray_Test(ops)
+        //shuffleArray_Test(ops)
 
         editors.forEach(editor => {
             if (editor.id != editorId && editor.getOnline()) {
@@ -790,7 +833,7 @@ function editorSetOnlineHandle(event) {
 
         const ops = Object.values(opsSet)
 
-        shuffleArray_Test(ops)
+        //shuffleArray_Test(ops)
 
         currentEditor.executeOperations(ops)
     }
