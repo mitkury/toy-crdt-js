@@ -579,50 +579,72 @@ class Editor extends EventTarget {
 
                 let targetLeftId = op.leftId
 
-                // An attempt to find the correct targetLeftId
+                // TODO: 1) gather node with the same originLeftId
+                const nodesWithSameLeftId = []
                 {
-                    let startingNodeId = null
-
-                    // If targetLeftId is null then find the node that has leftId null.
-                    // There should be only 1 node with leftId == null.
-                    // We will start our search from the first node
-                    if (!targetLeftId) {
-                        const nodes = Object.values(this.crdtNodes)
-                        for (var i = 0; i < nodes.length; i++) {
-                            const node = nodes[i]
-                            if (node.leftId == null) {
-                                startingNodeId = node.id
-                                break
-                            }
+                    const nodes = Object.values(this.crdtNodes)
+                    for (var i = 0; i < nodes.length; i++) {
+                        if (OpId.equals(nodes[i].originLeftId, targetLeftId)) {
+                            nodesWithSameLeftId.push(nodes[i])
                         }
                     }
-                    // If targetLeftId exists, then we should start the search from
-                    // its right node
-                    else if (this.crdtNodes[targetLeftId].rightId) {
-                        startingNodeId = this.crdtNodes[targetLeftId].rightId
+                }
 
+                // TODO: 2) sort and find suitable node on the left
+                let leftNode
+                {
+                    nodesWithSameLeftId.sort((a, b) => {
+                        return OpId.compare(a.id, b.id)
+                    })
+
+                    for (var i = 0; i < nodesWithSameLeftId.length; i++) {
+                        const node = nodesWithSameLeftId[i]
+
+                        // We expect the node's ID be less than new node 
+                        if (node.id.isGreaterThan(op.id)) {
+                            break
+                        }
+
+                        leftNode = node
                     }
+                }
 
-                    // In that case we start the search from startingNodeId to the right
-                    // to find targetLeftId for the new node.
-                    // If startingNodeId == null - we will use the existing targetLeftId
-                    if (startingNodeId) {
+                // TODO: 3) get the chain starting from the node on the left
+                if (leftNode) {
+                    if (!leftNode.rightId) {
+                        if (OpId.equals(leftNode.id, op.rightId)) {
+                            targetLeftId = leftNode.leftId
+                        } else {
+                            targetLeftId = leftNode.id    
+                        }  
+                    } else {
+                        if (OpId.equals(leftNode.id, op.rightId)) {
+                            targetLeftId = leftNode.leftId
+                        } else {
+                            const leftChainIds = [leftNode.id]
+                            let nodeId = leftNode.rightId
+                            while (true) {
+                                const node = this.crdtNodes[nodeId]
 
-                        // Find nodes in between left and right id
-                        // If op.rightId is null then it will scan till the last node (rightId == null)
-                        while (true) {
-                            if (startingNodeId == op.rightId) {
-                                break
+                                if (OpId.equals(node.id, op.rightId)) {
+                                    break
+                                }
+
+                                if (OpId.equals(node.leftId, node.originLeftId)) {
+                                    leftChainIds.push(node.id)
+                                }
+                                else {
+                                    break
+                                }
+
+                                if (!node.rightId) {
+                                    break
+                                }
+
+                                nodeId = node.rightId
                             }
 
-                            const node = this.crdtNodes[startingNodeId]
-                            if (!op.id.isGreaterThan(node.id)) {
-                                break
-                            }
-
-                            targetLeftId = node.id
-
-                            startingNodeId = node.rightId
+                            targetLeftId = leftChainIds[leftChainIds.length - 1]
                         }
                     }
                 }
@@ -630,7 +652,7 @@ class Editor extends EventTarget {
                 let leftEl = null
                 // Try to get an element of a non-deleted node
                 if (targetLeftId) {
-                    const nonDeletedLeftId = targetLeftId
+                    let nonDeletedLeftId = targetLeftId
                     while (true) {
                         const node = this.crdtNodes[nonDeletedLeftId]
                         if (!node.deleted) {
@@ -692,6 +714,8 @@ class Editor extends EventTarget {
                     parentId: op.parentId,
                     leftId: targetLeftId,
                     rightId: targetRightId,
+                    originLeftId: op.leftId,
+                    originRightId: op.rightId,
                     tagName: op.tagName,
                     text: String(op.text),
                     deleted: false,
