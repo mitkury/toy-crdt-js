@@ -579,7 +579,7 @@ class Editor extends EventTarget {
 
                 let targetLeftId = op.leftId
 
-                // TODO: 1) gather node with the same originLeftId
+                // 1) gather node with the same originLeftId
                 const nodesWithSameLeftId = []
                 {
                     const nodes = Object.values(this.crdtNodes)
@@ -590,7 +590,7 @@ class Editor extends EventTarget {
                     }
                 }
 
-                // TODO: 2) sort and find suitable node on the left
+                // 2) sort and find suitable node on the left
                 let leftNode
                 {
                     nodesWithSameLeftId.sort((a, b) => {
@@ -609,7 +609,7 @@ class Editor extends EventTarget {
                     }
                 }
 
-                // TODO: 3) get the chain starting from the node on the left
+                // 3) get the chain starting from the node on the left
                 if (leftNode) {
                     if (!leftNode.rightId) {
                         if (OpId.equals(leftNode.id, op.rightId)) {
@@ -626,17 +626,29 @@ class Editor extends EventTarget {
                             while (true) {
                                 const node = this.crdtNodes[nodeId]
 
+                                // Check if the node is the operation's right ID
                                 if (OpId.equals(node.id, op.rightId)) {
                                     break
                                 }
 
-                                if (OpId.equals(node.leftId, node.originLeftId)) {
-                                    leftChainIds.push(node.id)
+                                // Check if the node is one of the nodes with the same 
+                                // operation left ID
+                                let isNodeOneOfTheNodesWithSameOpLeftId = false
+                                for (var i = 0; i < nodesWithSameLeftId.length; i++) {
+                                    if (OpId.equals(node.id, nodesWithSameLeftId[i].id)) {
+                                        isNodeOneOfTheNodesWithSameOpLeftId = true
+                                        break
+                                    }
                                 }
-                                else {
+                                if (isNodeOneOfTheNodesWithSameOpLeftId) {
                                     break
                                 }
 
+                                // If none of the above breaks, then we consider this node
+                                // part of the chain
+                                leftChainIds.push(node.id)
+
+                                // If it's the last node
                                 if (!node.rightId) {
                                     break
                                 }
@@ -707,6 +719,12 @@ class Editor extends EventTarget {
 
                     // 2 rightId of the node on the left
                     leftNode.rightId = op.id
+                }
+                else {
+                    // Try to find targetRightId
+                    if (nodesWithSameLeftId.length > 0) {
+                        targetRightId = nodesWithSameLeftId[0].id
+                    }
                 }
 
                 this.crdtNodes[op.id] = {
