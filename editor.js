@@ -125,6 +125,8 @@ class Editor extends EventTarget {
     domElements = {}
     crdtNodes = {}
     operations = {}
+    #headNodeId = null
+    #tailNodeId = null
     #opsWithMissingLeftId = {}
     #opsWithMissingParentId = {}
     #delOpsWithMissingTargetId = {}
@@ -505,10 +507,10 @@ class Editor extends EventTarget {
         if (targetCaret.leftId) {
             const selection = window.getSelection()
 
-            const nodeOnTheLeft = this.#getActualNodeOnTheLeft(targetCaret.leftId)
+            const nodeOnTheLeftId = this.#getNonDeletedNodeIdFromLeft(targetCaret.leftId)
 
-            if (nodeOnTheLeft) {
-                const anchorNode = this.domElements[nodeOnTheLeft.id]
+            if (nodeOnTheLeftId) {
+                const anchorNode = this.domElements[nodeOnTheLeftId]
                 selection.setBaseAndExtent(anchorNode, 1, anchorNode, 1)
             }
         }
@@ -519,21 +521,368 @@ class Editor extends EventTarget {
         return new OpId(this.counter, this.id)
     }
 
-    #getActualNodeOnTheLeft(nodeId) {
+    #getNonDeletedNodeIdFromLeft(nodeId) {
         if (!nodeId) {
-            null
+            return null
         }
 
         let targetNode = this.crdtNodes[nodeId]
         if (targetNode && targetNode.deleted) {
             if (targetNode.leftId) {
-                return this.#getActualNodeOnTheLeft(targetNode.leftId)
+                return this.#getNonDeletedNodeIdFromLeft(targetNode.leftId)
             }
 
             return null
         }
 
-        return targetNode
+        return targetNode ? targetNode.id : null
+    }
+
+    #getNonDeletedNodeIdFromRight(nodeId) {
+        if (!nodeId) {
+            return null
+        }
+
+        let targetNode = this.crdtNodes[nodeId]
+        if (targetNode && targetNode.deleted) {
+            if (targetNode.rightId) {
+                return this.#getNonDeletedNodeIdFromRight(targetNode.rightId)
+            }
+
+            return null
+        }
+
+        return targetNode ? targetNode.id : null
+    }
+
+    #getActualLeftAndRightId_1(operation) {
+        // Get a range between left and right ID
+        // TODO: merge this with 'getSuitablePlaceInARange'
+        const range = this.#getRangeBetweenLeftAndRightId_2(operation.leftId, operation.rightId)
+
+        if (range.length == 0) {
+            const leftNodeId = this.#getNonDeletedNodeIdFromLeft(operation.leftId)
+            //const rightNodeId = leftNodeId != null ? this.#getNonDeletedNodeIdFromLeft(this.crdtNodes[leftNodeId].rightId) : null
+            let rightNodeId = null
+            if (leftNodeId != null) {
+                rightNodeId = this.#getNonDeletedNodeIdFromLeft(this.crdtNodes[leftNodeId].rightId)
+            } else {
+                rightNodeId = this.#getNonDeletedNodeIdFromLeft(this.#headNodeId)
+            }
+
+            return [
+                leftNodeId,
+                rightNodeId
+            ]
+        }
+
+        const leftAndRightIds = this.#getSuitablePlaceInARange_3(operation, range)
+
+        // Find a suitable place in that range.
+        // Skip deleted nodes and get the ones that are not deleted
+        return [
+            this.#getNonDeletedNodeIdFromLeft(leftAndRightIds[0]),
+            this.#getNonDeletedNodeIdFromRight(leftAndRightIds[1])
+        ]
+    }
+
+    #getRangeBetweenLeftAndRightId_2(leftId, rightId) {
+        const startNodeId = this.#getFirstNodeIdOnTheRightFromNode(leftId)
+
+        if (!startNodeId || OpId.equals(startNodeId, rightId)) {
+            return []
+        }
+
+        const range = []
+        let node = this.crdtNodes[startNodeId]
+
+        while (true) {
+            range.push(node)
+
+            if (OpId.equals(node.rightId, rightId)) {
+                break
+            }
+
+            if (rightId != null && node.rightId == null) {
+                console.error("Reached the end but couldn't find the rightId")
+                break
+            }
+
+            node = this.crdtNodes[node.rightId]
+        }
+
+        return range
+    }
+
+    #getSortedChainsFromARange(range) {
+        if (range.length == 0) {
+            return []
+        }
+
+        if (range.length == 1) {
+            return [{
+                headId: range[0].id,
+                tailId: range[0].id
+            }]
+        }
+
+        const sortedChains = []
+
+        let i = 0
+        while (i < range.length) {
+            const node = range[i]
+ 
+            const pair = {
+                headId: node.id,
+                tailId: node.id
+            }
+
+            i++
+            // Jump to a node that starts a new chain
+            for (let j = i; j < range.length; j++) {
+                const node = range[j]
+                i = j
+
+                if (!OpId.equals(node.originLeftId, node.leftId)) {
+                    // Assign the tail of the chain
+                    // Which is the last node in the chain
+                    pair.tailId = range[j - 1].id
+                    break
+                }
+
+                // If we reached the end
+                if (i == range.length - 1) {
+                    pair.tailId = node.id
+                    // That should only mean that we reached the end. So let's break
+                    // out of the outer 'while' loop by setting 'i' to highest number
+                    i = Number.POSITIVE_INFINITY
+                    break
+                }
+
+            }
+
+            sortedChains.push(pair)
+        }
+
+        sortedChains.sort((a, b) => {
+            return OpId.compare(a.headId, b.headId)
+        })
+
+        return sortedChains
+    }
+
+    #getSuitablePlaceInARange_3(operation, range) {
+        // Account for chains (nodes inserted from left to right without interruptions)
+        // Find the best place for a new node to be inserted
+
+        let targetLeftId = operation.leftId
+        let targetRightId = operation.rightId
+
+        const sortedChains = this.#getSortedChainsFromARange(range)
+
+        for (let i = 0; i < sortedChains.length; i++) {
+            if (sortedChains[i].headId.isGreaterThan(operation.id)) {
+                // TODO: consider, finding A and B between operation.id can be inserted
+                // E.g 2 & 1, A and right-null
+                targetLeftId = this.crdtNodes[sortedChains[i].headId].leftId
+                break
+            }
+
+            //targetLeftId = sortedChains[i].tailId 
+        }
+
+        if (!targetLeftId && range.length > 0) {
+            targetRightId = range[0].id
+        }
+        else if (targetLeftId) {
+            targetRightId = this.crdtNodes[targetLeftId].rightId
+        }
+
+        return [targetLeftId, targetRightId]
+
+        /*
+        let i = 0
+        // TODO: probably, the logic is not correct. Fix it
+        while (i < range.length) {
+            const node = range[i]
+
+            if (node.id.isGreaterThan(operation.id)) {
+                break
+            }
+
+            targetLeftId = node.id
+
+            i++
+
+            // Jump to a node that starts a new chain
+            for (let j = i; j < range.length; j++) {
+                const node = range[j]
+
+                if (!OpId.equals(node.originLeftId, node.leftId)) {
+                    targetLeftId = range[j - 1].id
+                    i = j
+                    break
+                }
+
+                if (node.rightId == null) {
+                    targetLeftId = node.id
+                }
+
+                i = j
+            }
+        }
+
+        if (!targetLeftId && range.length > 0) {
+            targetRightId = range[0].id
+        }
+        else if (targetLeftId) {
+            targetRightId = this.crdtNodes[targetLeftId].rightId
+        }
+
+        return [targetLeftId, targetRightId]
+        */
+    }
+
+    #getFirstNodeIdOnTheRightFromNode(nodeId, outNodesWithSameOriginLeftId) {
+        // First gather all of the nodes with the same ORIGIN left id
+        let nodesWithSameOriginLeftId = []
+        const nodes = Object.values(this.crdtNodes)
+        for (let i = 0; i < nodes.length; i++) {
+            if (OpId.equals(nodes[i].originLeftId, nodeId)) {
+                nodesWithSameOriginLeftId.push(nodes[i])
+            }
+        }
+
+        if (nodesWithSameOriginLeftId.length == 0) {
+            return null
+        }
+
+        // Sort the nodes by their position from the left
+        const nodesAndTheirPositonsFromTheLeft = []
+        for (var i = 0; i < nodesWithSameOriginLeftId.length; i++) {
+            let node = nodesWithSameOriginLeftId[i].leftId
+            let amountOfNodesFromTargetLeftId = 0
+            while (true) {
+                if (node == null || node == nodeId) {
+                    break
+                }
+
+                node = this.crdtNodes[node].leftId
+                amountOfNodesFromTargetLeftId++
+            }
+            nodesAndTheirPositonsFromTheLeft.push({
+                pos: amountOfNodesFromTargetLeftId,
+                node: nodesWithSameOriginLeftId[i]
+            })
+        }
+
+        nodesAndTheirPositonsFromTheLeft.sort((a, b) => {
+            return a.pos - b.pos
+        })
+
+        nodesWithSameOriginLeftId = nodesAndTheirPositonsFromTheLeft.map(o => o.node)
+
+        if (outNodesWithSameOriginLeftId) {
+            if (Array.isArray(outNodesWithSameOriginLeftId)) {
+                outNodesWithSameOriginLeftId.push(...nodesWithSameOriginLeftId)
+            } else {
+                console.error("Expected an array. Got something else")
+            }
+        }
+
+        // Return the first node from that array. That is the node on the far left.
+        return nodesWithSameOriginLeftId[0].id
+    }
+
+    #getLastNodeOnLeftFromNode(nodeId, outNodesWithSameOriginRightId) {
+        // TODO: consider using this function to return the range.
+
+        // First gather all of the nodes with the same ORIGIN right id
+        /*
+        let nodesWithSameOriginRightId = []
+        const nodes = Object.values(this.crdtNodes)
+        for (let i = 0; i < nodes.length; i++) {
+            if (OpId.equals(nodes[i].originRightId, nodeId)) {
+                nodesWithSameOriginRightId.push(nodes[i])
+            }
+        }
+
+        // Find the node that is last among those nodes 
+        // (actual position before the target nodeId)
+        let nodeOnFarRight = null
+        let minPosFromRight = Number.MAX_VALUE
+        for (let i = 0; i < nodesWithSameOriginRightId.length; i++) {
+            let amountOfNodesFromTargetRightId = 0
+            let node = nodesWithSameOriginRightId[i]
+            while (true) {
+                if (amountOfNodesFromTargetRightId > minPosFromRight) {
+                    break
+                }
+
+                if (!node || node.id == nodeId) {
+                    break
+                }
+
+                node = this.crdtNodes[node.rightId]
+                amountOfNodesFromTargetRightId++
+            }
+
+            if (amountOfNodesFromTargetRightId < minPosFromRight) {
+                nodeOnFarRight = nodesWithSameOriginRightId[i]
+                minPosFromRight = amountOfNodesFromTargetRightId
+            }
+        }
+
+        return nodeOnFarRight
+        */
+
+        let nodesWithSameOriginRightId = []
+        const nodes = Object.values(this.crdtNodes)
+        for (let i = 0; i < nodes.length; i++) {
+            if (OpId.equals(nodes[i].originRightId, nodeId)) {
+                nodesWithSameOriginRightId.push(nodes[i])
+            }
+        }
+
+        if (nodesWithSameOriginRightId.length == 0) {
+            return null
+        }
+
+        // Sort the nodes by their position from the left
+        const nodesAndTheirPositonsFromTheRight = []
+        for (var i = 0; i < nodesWithSameOriginRightId.length; i++) {
+            let node = nodesWithSameOriginRightId[i].leftId
+            let amountOfNodesFromTargetRightId = 0
+            while (true) {
+                if (node == null || node == nodeId) {
+                    break
+                }
+
+                node = this.crdtNodes[node].rightId
+                amountOfNodesFromTargetRightId++
+            }
+            nodesAndTheirPositonsFromTheRight.push({
+                pos: amountOfNodesFromTargetRightId,
+                node: nodesWithSameOriginRightId[i]
+            })
+        }
+
+        nodesAndTheirPositonsFromTheRight.sort((a, b) => {
+            return a.pos - b.pos
+        })
+
+        nodesWithSameOriginRightId = nodesAndTheirPositonsFromTheRight.map(o => o.node)
+
+        if (outNodesWithSameOriginRightId) {
+            if (Array.isArray(outNodesWithSameOriginRightId)) {
+                outNodesWithSameOriginRightId.push(...nodesWithSameOriginRightId)
+            } else {
+                console.error("Expected an array. Got something else")
+            }
+        }
+
+        // Return the first node from that array. That is the node on the far left.
+        return nodesWithSameOriginRightId[0]
     }
 
     #executeOperationsUnsafe(ops) {
@@ -577,10 +926,62 @@ class Editor extends EventTarget {
                 // That is because there might be other nodes standing before leftId.
                 // We need to find the right sibling for our new node based on node IDs.
 
-                let targetLeftId = op.leftId
+                const pair = this.#getActualLeftAndRightId_1(op)
+                const targetLeftId = pair[0]
+                const targetRightId = pair[1]
 
+
+                /*
+                const allNodesArr = Object.values(this.crdtNodes)
+
+                let nodesWithSameLeftId = []
+
+                // TODO: Try the following...
+                // get nodes in the range of leftId and rightId
+                // find the perfect spot for the new node
+                // account for chains of nodes to remove interleaving
+                if (allNodesArr.length > 0) {
+                    const startNode = this.#getFirstNodeOnTheRightFromNode(op.leftId, nodesWithSameLeftId)
+                    // When we insert exactly between left and right id
+                    if (startNode && OpId.equals(startNode.id, op.rightId)) {
+                        targetLeftId = startNode.leftId
+                    }
+                    // When there are other nodes in between left and right id
+                    else {
+                        const endNode = this.#getLastNodeOnLeftFromNode(op.rightId)
+
+                        // Gather nodes in between start and left node
+                        const nodesInBetween = []
+                        let targetNode = startNode
+                        while (true) {
+                            if (!targetNode || !targetNode.rightId) {
+                                break
+                            }
+
+                            nodesInBetween.push(targetNode)
+                            targetNode = targetNode.rightId
+
+                            if (endNode && targetNode.id == endNode.id) {
+                                break
+                            }
+                        }
+
+                        // TODO: account for chains and find the best chain
+                        // to insert after 
+                        for (let i = 0; i < nodesInBetween.length; i++) {
+                            if (nodesInBetween[i].id.isGreaterThan(op.id)) {
+                                break
+                            }
+
+                            targetLeftId = nodesInBetween[i].id
+                        }
+                    }
+                }
+                */
+
+                /*
                 // 1) gather node with the same originLeftId
-                const nodesWithSameLeftId = []
+                let nodesWithSameLeftId = []
                 {
                     const nodes = Object.values(this.crdtNodes)
                     for (var i = 0; i < nodes.length; i++) {
@@ -589,24 +990,63 @@ class Editor extends EventTarget {
                         }
                     }
                 }
+                */
 
+                /*
                 // 2) sort and find suitable node on the left
                 let leftNode
                 {
-                    nodesWithSameLeftId.sort((a, b) => {
-                        return OpId.compare(a.id, b.id)
-                    })
+                    {
+                        const nodesAndTheirPositonsFromTheLeft = []
+                        for (var i = 0; i < nodesWithSameLeftId.length; i++) {
+                            let nodeOnTheLeft = nodesWithSameLeftId[i].leftId
+                            let amountOfNodesFromTargetLeftId = 0
+                            while (true) {
+                                if (nodeOnTheLeft == null || nodeOnTheLeft == op.leftId) {
+                                    break
+                                }
+
+                                nodeOnTheLeft = this.crdtNodes[nodeOnTheLeft].leftId
+                                amountOfNodesFromTargetLeftId++
+                            }
+                            nodesAndTheirPositonsFromTheLeft.push({
+                                pos: amountOfNodesFromTargetLeftId,
+                                node: nodesWithSameLeftId[i]
+                            })
+                        }
+
+                        nodesAndTheirPositonsFromTheLeft.sort((a, b) => {
+                            return a.pos - b.pos
+                        })
+
+                        nodesWithSameLeftId = nodesAndTheirPositonsFromTheLeft.map(o => o.node)
+                    }
 
                     for (var i = 0; i < nodesWithSameLeftId.length; i++) {
                         const node = nodesWithSameLeftId[i]
 
-                        // We expect the node's ID be less than new node 
-                        if (node.id.isGreaterThan(op.id)) {
+                        if (op.rightId != null && OpId.equals(node.id, op.rightId)) {
                             break
                         }
 
+                        
+                        // We expect the node's ID be less than the new node's
+                        if (node.id.isGreaterThan(op.id)) {
+                            if (i == 0 && node.leftId != null) {
+                                targetLeftId = this.crdtNodes[node.leftId].id
+                            }
+                            break
+                        }
+                        
+
                         leftNode = node
                     }
+
+                    
+                    // TODO: sort those by their position from left to right
+                    //nodesWithSameLeftId.sort((a, b) => {
+                    //    return OpId.compare(a.id, b.id)
+                    //})
                 }
 
                 // 3) get the chain starting from the node on the left
@@ -615,8 +1055,8 @@ class Editor extends EventTarget {
                         if (OpId.equals(leftNode.id, op.rightId)) {
                             targetLeftId = leftNode.leftId
                         } else {
-                            targetLeftId = leftNode.id    
-                        }  
+                            targetLeftId = leftNode.id
+                        }
                     } else {
                         if (OpId.equals(leftNode.id, op.rightId)) {
                             targetLeftId = leftNode.leftId
@@ -660,7 +1100,9 @@ class Editor extends EventTarget {
                         }
                     }
                 }
+                */
 
+                /*
                 let leftEl = null
                 // Try to get an element of a non-deleted node
                 if (targetLeftId) {
@@ -681,29 +1123,36 @@ class Editor extends EventTarget {
                     if (nonDeletedLeftId) {
                         leftEl = this.domElements[nonDeletedLeftId]
                     }
-                }
+                }*/
 
-                const newEl = element(op.tagName, editorEl)
-                newEl.setAttribute('data-id', op.id)
+                if (targetLeftId) {
+                    const leftNode = this.crdtNodes[targetLeftId]
 
-                if (op.text) {
-                    newEl.innerText = op.text
-                }
-
-                const parentEl = op.parentId == 'root' ? this.editorEl : this.domElements[op.parentId]
-
-                if (parentEl) {
-                    if (leftEl && leftEl.nextSibling) {
-                        parentEl.insertBefore(newEl, leftEl.nextSibling)
-                    } else {
-                        parentEl.prepend(newEl)
+                    if (leftNode.rightId) {
+                        const rightNode = this.crdtNodes[leftNode.rightId]
+                        rightNode.leftId = op.id
                     }
-                } else {
-                    editorEl.appendChild(newEl)
+
+                    leftNode.rightId = op.id
                 }
 
-                this.domElements[op.id] = newEl
+                if (targetRightId) {
+                    const rightNode = this.crdtNodes[targetRightId]
 
+                    // We do this in case if we already set rightNode's ID to op.id
+                    // in the above
+                    if (!OpId.equals(rightNode.leftId, op.id)) {
+                        if (rightNode.leftId) {
+                            const leftNode = this.crdtNodes[rightNode.leftId]
+                            leftNode.rightId = op.id
+                        }
+
+                        rightNode.leftId = op.id
+                    }
+                }
+
+                /*
+                // TODO: consider to return it from the function where I get targetLeftId
                 let targetRightId = null
 
                 // Update left and right nodes
@@ -722,10 +1171,14 @@ class Editor extends EventTarget {
                 }
                 else {
                     // Try to find targetRightId
+
                     if (nodesWithSameLeftId.length > 0) {
-                        targetRightId = nodesWithSameLeftId[0].id
+                        let node = nodesWithSameLeftId[0]
+                        targetRightId = node.id
+                        node.leftId = op.id
                     }
                 }
+                */
 
                 this.crdtNodes[op.id] = {
                     id: op.id,
@@ -738,6 +1191,38 @@ class Editor extends EventTarget {
                     text: String(op.text),
                     deleted: false,
                 }
+
+                if (targetLeftId == null) {
+                    this.#headNodeId = op.id
+                }
+                if (targetRightId == null) {
+                    this.#tailNodeId = op.id
+                }
+
+                // TODO: move it out?
+                const newEl = element(op.tagName, editorEl)
+                newEl.setAttribute('data-id', op.id)
+
+                if (op.text) {
+                    newEl.innerText = op.text
+                }
+
+                const parentEl = op.parentId == 'root' ? this.editorEl : this.domElements[op.parentId]
+
+
+                if (parentEl) {
+                    const leftEl = targetLeftId ? this.domElements[targetLeftId] : null
+
+                    if (leftEl && leftEl.nextSibling) {
+                        parentEl.insertBefore(newEl, leftEl.nextSibling)
+                    } else {
+                        parentEl.prepend(newEl)
+                    }
+                } else {
+                    editorEl.appendChild(newEl)
+                }
+
+                this.domElements[op.id] = newEl
 
                 if (this.#opsWithMissingParentId.hasOwnProperty(op.id)) {
                     const ops = this.#opsWithMissingParentId[op.id]
