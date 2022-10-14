@@ -440,12 +440,16 @@ class Editor extends EventTarget {
                             const newText = targetText.replace(prevText, '')
                             let parentId = initNodeId
 
+                            const selection = window.getSelection()
+                            const anchorNode = selection.anchorNode
+                            const anchorOffset = selection.anchorOffset
+        
                             // Detect if we inseted from the left. 
                             // It may happen when we type backwards.
                             // In that case assign a target parentId 
                             // to the initNode's parent.
-                            const isInsertedFromLeft = newText == targetText[0]
-                            if (isInsertedFromLeft) {
+                            const insertOnTheRight = anchorNode == target && anchorOffset == target.length
+                            if (!insertOnTheRight) {
                                 parentId = this.crdtNodes[initNodeId].parentId
                             }
 
