@@ -30,6 +30,13 @@ class OpId {
     #counter
 
     static compare(opIdA, opIdB) {
+        if (opIdA instanceof OpId === false) {
+            opIdA = OpId.tryParseStr(opIdA)
+        }
+        if (opIdB instanceof OpId === false) {
+            opIdB = opIdB.tryParseStr(opIdB)
+        }
+
         const counterA = opIdA.getCounter()
         const counterB = opIdB.getCounter()
 
@@ -176,55 +183,40 @@ class Editor extends EventTarget {
                         // Text node (inside a node with 'data-id')
                         if (anchorNode.nodeType === 3) {
                             anchorParentId = OpId.tryParseStr(anchorNode.parentNode.getAttribute('data-id'))
-                            // Node with 'data-id'
-                        } else {
+
+                        }
+                        // Node with 'data-id' 
+                        else {
                             anchorParentId = OpId.tryParseStr(anchorNode.getAttribute('data-id'))
                         }
 
-                        let targetParentId
-
-                        if (anchorParentId.isRoot()) {
-                            targetParentId = anchorParentId
-                        } else {
-                            targetParentId = this.crdtNodes[anchorParentId].parentId
-
-                            // In that case we insert the new line before the anchor
-                            if (selection.anchorOffset == 0) {
-                                if (anchorParentId) {
-                                    let targetNode = this.crdtNodes[anchorParentId]
-                                    while (true) {
-                                        if (!targetNode.leftId) {
-                                            targetNode = null
-                                            break
-                                        }
-
-                                        targetNode = this.crdtNodes[targetNode.leftId]
-
-                                        // If the node is deleted - we continue the search. 
-                                        // Otherwise - we found the active node on the left
-                                        if (!targetNode.deleted) {
-                                            break
-                                        }
-                                    }
-
-                                    anchorParentId = targetNode ? targetNode.id : null
-                                }
+                        // In that case we insert the new line before the anchor
+                        if (selection.anchorOffset == 0 && anchorParentId) {
+                            // Try to get the non-deleted node on the left
+                            // If the element exists in the editor we assume
+                            // it's not deleted
+                            let elementOnTheLeft = this.domElements[anchorParentId].previousSibling
+                            if (elementOnTheLeft != null) {
+                                anchorParentId = this.crdtNodes[elementOnTheLeft.getAttribute('data-id')]
+                            } else {
+                                anchorParentId = OpId.root()
                             }
                         }
+
 
                         const newBrId = this.#getNewOperationId()
                         const newSpanId = this.#getNewOperationId()
                         const ops = []
                         ops.push({
                             id: newBrId,
-                            parentId: targetParentId,
+                            parentId: anchorParentId,
                             type: 'add',
                             tagName: 'br',
 
                         })
                         ops.push({
                             id: newSpanId,
-                            parentId: targetParentId,
+                            parentId: newBrId,
                             type: 'add',
                             tagName: 'span',
                             // Insert 'zero width space' in the span. Otherwise the caret doesn't want to go into an element without a text node
@@ -274,7 +266,7 @@ class Editor extends EventTarget {
                 text: null,
                 deleted: false,
             }
-            
+
             this.domElements[OpId.root()] = this.editorEl
         })
 
@@ -432,7 +424,7 @@ class Editor extends EventTarget {
 
                 // If editing a text node in one of the existing op nodes
                 if (!initNodeId.isRoot()) {
-                    
+
                     const prevText = mutation.oldValue
 
                     if (targetText) {
@@ -443,7 +435,7 @@ class Editor extends EventTarget {
                             const selection = window.getSelection()
                             const anchorNode = selection.anchorNode
                             const anchorOffset = selection.anchorOffset
-        
+
                             // Detect if we inseted from the left. 
                             // It may happen when we type backwards.
                             // In that case assign a target parentId 
@@ -556,7 +548,7 @@ class Editor extends EventTarget {
 
     #getActualLeftAndRightId_1(operation) {
         // TODO: let's switch to RGA. Let's look in the parent
-        
+
         const parentNode = this.crdtNodes[operation.parentId]
 
         if (parentNode.childIds.length == 0) {
@@ -645,7 +637,7 @@ class Editor extends EventTarget {
         let i = 0
         while (i < range.length) {
             const node = range[i]
- 
+
             const pair = {
                 headId: node.id,
                 tailId: node.id
@@ -903,10 +895,10 @@ class Editor extends EventTarget {
                     targetLeftId = op.parentId
                 }
 
-                if (targetLeftId == OpId.root()) {
+                if (OpId.equals(targetLeftId, OpId.root())) {
                     targetLeftId = null
                 }
-                
+
                 parentNode.childIds.splice(indexOfInsertion, 0, op.id)
 
                 this.crdtNodes[op.id] = {
@@ -927,7 +919,7 @@ class Editor extends EventTarget {
                 }
 
                 // TODO: find a target non deleted left id
-                // First check thether targetLeftIs deleted
+                // First check whether targetLeftIs is deleted
                 // If it's then look at the parent
                 // If the parent is not deleted then take a look at all of the
                 // adjacent child ids on the left and find the one that is not deleted
