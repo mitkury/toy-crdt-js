@@ -34,7 +34,7 @@ class OpId {
             opIdA = OpId.tryParseStr(opIdA)
         }
         if (opIdB instanceof OpId === false) {
-            opIdB = opIdB.tryParseStr(opIdB)
+            opIdB = OpId.tryParseStr(opIdB)
         }
 
         const counterA = opIdA.getCounter()
@@ -286,8 +286,15 @@ class Editor extends EventTarget {
 
             const selection = window.getSelection()
 
+            let node = null
+            if (selection.anchorNode.nodeType === 3) {
+                node = selection.anchorNode.parentNode
+            } else {
+                node = selection.anchorNode
+            }
+
             this.caret = {
-                leftId: selection.anchorNode
+                leftId: node.getAttribute('data-id')
             }
         })
 
@@ -340,9 +347,6 @@ class Editor extends EventTarget {
                             if (node.parentNode && node.parentNode.tagName === 'SPAN') {
                                 // Put a new node outside of span that is used only for text node (a character)
                                 const leftId = OpId.tryParseStr(node.parentNode.getAttribute('data-id'))
-                                //const leftNode = this.crdtNodes[leftId]
-                                //const rightId = leftNode.rightId ? this.crdtNodes[leftNode.rightId].id : null
-                                //const targetParentId = leftNode.parentId
                                 const newNodeId = this.#getNewOperationId()
 
                                 ops.push({
@@ -397,7 +401,6 @@ class Editor extends EventTarget {
                             }
                         }
                     }
-
                 }
 
                 if (mutation.removedNodes.length > 0) {
@@ -498,9 +501,7 @@ class Editor extends EventTarget {
         if (targetCaret.leftId) {
             const selection = window.getSelection()
 
-            // TODO: change the function. This no longer works
-            const nodeOnTheLeftId = this.#getNonDeletedNodeIdFromLeft(targetCaret.leftId)
-
+            const nodeOnTheLeftId = this.#getNonDeletedLeftId(targetCaret.leftId)
             if (nodeOnTheLeftId) {
                 const anchorNode = this.domElements[nodeOnTheLeftId]
                 selection.setBaseAndExtent(anchorNode, 1, anchorNode, 1)
@@ -511,23 +512,6 @@ class Editor extends EventTarget {
     #getNewOperationId() {
         this.counter++
         return new OpId(this.counter, this.id)
-    }
-
-    #getNonDeletedNodeIdFromLeft(nodeId) {
-        if (!nodeId) {
-            return null
-        }
-
-        let targetNode = this.crdtNodes[nodeId]
-        if (targetNode && targetNode.deleted) {
-            if (targetNode.leftId) {
-                return this.#getNonDeletedNodeIdFromLeft(targetNode.leftId)
-            }
-
-            return null
-        }
-
-        return targetNode ? targetNode.id : null
     }
 
     #getTailId(id) {
@@ -564,7 +548,7 @@ class Editor extends EventTarget {
         if (nonDeletedChildNode == null && !node.deleted) {
             // Return the tail that is not deleted
             return node
-        } 
+        }
         else if (nonDeletedChildNode == null && node.parentId != null) {
             // Go up because we haven't got a non-deleted tail node yet
             return this.#getNonDeletedTailNode(node.parentId, node.id)
@@ -580,7 +564,7 @@ class Editor extends EventTarget {
      * Find a target non deleted left id. It goes left until it finds a non-deleted node
      */
     #getNonDeletedLeftId(id) {
-        if (id == null) {
+        if (!id) {
             return null
         }
 
@@ -622,14 +606,12 @@ class Editor extends EventTarget {
 
                 // First make sure that needed nodes already exist. If not then 
                 // save the operation for later, when a node appears
-                /* TODO: refactor to make it work with RGA
-                if (op.parentId != 'root' && !this.crdtNodes.hasOwnProperty(op.parentId)) {
+                if (!this.crdtNodes.hasOwnProperty(op.parentId)) {
                     let arr = []
                     if (this.#opsWithMissingParentId.hasOwnProperty(op.parentId)) {
                         arr = this.#opsWithMissingParentId[op.parentId]
                     }
                     arr.push(op)
-
                     this.#opsWithMissingParentId[op.parentId] = arr
                     continue
                 }
@@ -645,7 +627,7 @@ class Editor extends EventTarget {
 
                     continue
                 }
-                */
+
 
                 let targetLeftId = null
                 let indexOfInsertion = 0
@@ -720,13 +702,6 @@ class Editor extends EventTarget {
                     }
                 }
 
-                if (this.#opsWithMissingLeftId.hasOwnProperty(op.id)) {
-                    const ops = this.#opsWithMissingLeftId[op.id]
-                    if (ops && ops.length > 0) {
-                        this.#executeOperationsUnsafe(ops)
-                    }
-                }
-
                 if (this.#delOpsWithMissingTargetId.hasOwnProperty(op.id)) {
                     const ops = this.#delOpsWithMissingTargetId[op.id]
                     if (ops && ops.length > 0) {
@@ -734,7 +709,6 @@ class Editor extends EventTarget {
                     }
                 }
             } else if (op.type == 'del') {
-
                 if (!this.crdtNodes.hasOwnProperty(op.targetId)) {
                     let arr = []
                     if (this.#delOpsWithMissingTargetId.hasOwnProperty(op.targetId)) {
@@ -825,7 +799,7 @@ function editorSetOnlineHandle(event) {
     {
         const ops = Object.values(currentEditor.operations)
 
-        //shuffleArray_Test(ops)
+        shuffleArray_Test(ops)
 
         editors.forEach(editor => {
             if (editor.id != editorId && editor.getOnline()) {
@@ -849,7 +823,7 @@ function editorSetOnlineHandle(event) {
 
         const ops = Object.values(opsSet)
 
-        //shuffleArray_Test(ops)
+        shuffleArray_Test(ops)
 
         currentEditor.executeOperations(ops)
     }
