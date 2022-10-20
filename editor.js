@@ -325,7 +325,7 @@ class Editor extends EventTarget {
     }
 
     #editorMutationHandle(mutations, observer) {
-        const editorEl = this.editorEl;
+        const editorEl = this.editorEl
 
         this.stopObservingMutations()
 
@@ -583,7 +583,7 @@ class Editor extends EventTarget {
 
 
     #executeOperationsUnsafe(ops) {
-        const editorEl = this.editorEl;
+        const editorEl = this.editorEl
 
         if (!ops || ops.length == 0) {
             return
@@ -768,21 +768,21 @@ function editorOperationsHandle(event) {
 }
 
 function shuffleArray_Test(array) {
-    let currentIndex = array.length, randomIndex;
+    let currentIndex = array.length, randomIndex
 
     // While there remain elements to shuffle.
     while (currentIndex != 0) {
 
         // Pick a remaining element.
-        randomIndex = Math.floor(Math.random() * currentIndex);
-        currentIndex--;
+        randomIndex = Math.floor(Math.random() * currentIndex)
+        currentIndex--
 
         // And swap it with the current element.
         [array[currentIndex], array[randomIndex]] = [
-            array[randomIndex], array[currentIndex]];
+            array[randomIndex], array[currentIndex]]
     }
 
-    return array;
+    return array
 }
 
 function editorSetOnlineHandle(event) {
