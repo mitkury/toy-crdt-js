@@ -539,6 +539,43 @@ class Editor extends EventTarget {
         return this.#getTailId(node.childIds[node.childIds.length - 1])
     }
 
+    #getNonDeletedTailNode(id, startAfterId) {
+        const node = this.crdtNodes[id]
+
+        let nonDeletedChildNode = null
+        let startLookingInChildren = startAfterId ? false : true
+
+        for (let i = node.childIds.length - 1; i >= 0; i--) {
+            const childNode = this.crdtNodes[node.childIds[i]]
+
+            if (startLookingInChildren) {
+                // Go down and look for a tail non deleted child node.
+                // We do it recursively till we find the tail
+                nonDeletedChildNode = this.#getNonDeletedTailNode(node.childIds[i], null)
+                if (nonDeletedChildNode != null) {
+                    break
+                }
+            }
+            else if (startAfterId && OpId.equals(childNode.id, startAfterId)) {
+                startLookingInChildren = true
+            }
+        }
+
+        if (nonDeletedChildNode == null && !node.deleted) {
+            // Return the tail that is not deleted
+            return node
+        } 
+        else if (nonDeletedChildNode == null && node.parentId != null) {
+            // Go up because we haven't got a non-deleted tail node yet
+            return this.#getNonDeletedTailNode(node.parentId, node.id)
+        }
+        else {
+            // Return a non-deleted tail child node. That is the final step.
+            // We ether have a node or null here
+            return nonDeletedChildNode
+        }
+    }
+
     /**
      * Find a target non deleted left id. It goes left until it finds a non-deleted node
      */
@@ -552,41 +589,12 @@ class Editor extends EventTarget {
             return id
         }
 
-        // We need to find the first non-deleted node in the chain.
-        // It's OK that any nodes in the chain or parents are deleted. 
-
-        const parent = this.crdtNodes[node.parentId]
-        let childIdx = -1
-
-        // Try to find a non-deleted child of the same parent
-        for (let i = 0; i < parent.childIds.length; i++) {
-            const childNode = this.crdtNodes[parent.childIds[i]]
-
-            if (OpId.equals(childNode.id, id)) {
-                break
-            }
-
-            if (!childNode.deleted) {
-                childIdx = i
-            }
+        if (!node.parentId) {
+            return null
         }
 
-        // If we didn't find a non-deleted child then we look at the parent's parent 
-        // children or the parent itself if it doesn't have children.
-        if (childIdx == -1) {
-            const parentOfParent = this.crdtNodes[parent.parentId]
-            if (!parentOfParent) {
-                return null
-            }
-
-            if (parentOfParent.childIds.length > 0) {
-                return this.#getNonDeletedLeftId(parentOfParent.childIds[parentOfParent.childIds.length - 1])
-            } else {
-                return this.#getNonDeletedLeftId(parentOfParent.id)
-            }
-        } else {
-            return parent.childIds[childIdx]
-        }
+        const nonDeletedTail = this.#getNonDeletedTailNode(node.parentId, id)
+        return nonDeletedTail ? nonDeletedTail.id : null
     }
 
 
@@ -603,7 +611,8 @@ class Editor extends EventTarget {
             // Increase the local counter if the op's counter is larger.
             // We do it because we use the counter as a 'Lamport timestamp'
             // to insert nodes in a desirable order.
-            // So newer nodes can be inserted in front of old nodes.
+            // So newer nodes can be inserted in front of old nodes, eg.
+            // any time we insert something in between of nodes
             const newOpCounter = op.id.getCounter()
             if (newOpCounter > this.counter) {
                 this.counter = newOpCounter
@@ -659,15 +668,11 @@ class Editor extends EventTarget {
                     }
 
                     if (indexOfInsertion > 0) {
-                        // TODO: get a non-deleted tail ID
-
                         // Insert at the tail of the targetLeftId because the target
                         // may have its own children
                         targetLeftId = this.#getTailId(targetLeftId)
                     }
                 } else {
-                    // TODO: make sure it's not deleted
-
                     targetLeftId = op.parentId
                 }
 
