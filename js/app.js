@@ -59,9 +59,9 @@ function editorSetOnlineHandle(event) {
 
     // Sync changes from the editor that was offline to its online peers
     {
-        const ops = Object.values(currentEditor.operations)
+        const ops = currentEditor.getOperations()
 
-        shuffleArray_Test(ops)
+        //shuffleArray_Test(ops)
 
         editors.forEach(editor => {
             if (editor.id != editorId && editor.getOnline()) {
@@ -72,20 +72,18 @@ function editorSetOnlineHandle(event) {
 
     // Sync changes from online peers to the editor that was offline
     {
-        let opsSet = {}
+        let ops = []
 
         editors.forEach(editor => {
             if (editor.id != editorId && editor.getOnline()) {
-                opsSet = {
-                    ...opsSet,
-                    ...editor.operations
-                }
+                ops = [
+                    ...ops,
+                    ...editor.getOperations()
+                ]
             }
         })
 
-        const ops = Object.values(opsSet)
-
-        shuffleArray_Test(ops)
+        //shuffleArray_Test(ops)
 
         currentEditor.executeOperations(ops)
     }

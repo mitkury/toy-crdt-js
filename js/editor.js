@@ -1,10 +1,10 @@
 import { element, div, span, nodeHasDataId } from "/js/utils.js"
 import { OpId } from "/js/crdt/opId.js"
+import { TextCrdt } from "/js/crdt/textCrdt.js"
 
 export class Editor extends EventTarget {
 
     static #mutationConfig = {
-        //attributes: true,
         childList: true,
         subtree: true,
         characterData: true,
@@ -14,17 +14,12 @@ export class Editor extends EventTarget {
 
     editorEl = {}
     id = null
-    counter = 0
     domElements = {}
-    crdtNodes = {}
-    operations = {}
-    #opsWithMissingLeftId = {}
-    #opsWithMissingParentId = {}
-    #delOpsWithMissingTargetId = {}
     caret = null
     observer = null
 
     #isOnline = false
+    #textCrdt = null
 
     getOnline() {
         return this.#isOnline
@@ -45,6 +40,7 @@ export class Editor extends EventTarget {
         super()
 
         this.id = id
+        this.#textCrdt = new TextCrdt(id)
 
         div(inElement, containerEl => {
             containerEl.classList.add('editor')
@@ -81,15 +77,15 @@ export class Editor extends EventTarget {
                             // it's not deleted
                             let elementOnTheLeft = this.domElements[anchorParentId].previousSibling
                             if (elementOnTheLeft != null) {
-                                anchorParentId = this.crdtNodes[elementOnTheLeft.getAttribute('data-id')]
+                                anchorParentId = elementOnTheLeft.getAttribute('data-id')
                             } else {
                                 anchorParentId = OpId.root()
                             }
                         }
 
 
-                        const newBrId = this.#getNewOperationId()
-                        const newSpanId = this.#getNewOperationId()
+                        const newBrId = this.#textCrdt.getNewOperationId()
+                        const newSpanId = this.#textCrdt.getNewOperationId()
                         const ops = []
                         ops.push({
                             id: newBrId,
@@ -142,15 +138,6 @@ export class Editor extends EventTarget {
                 controlsEl.appendChild(label)
             })
 
-            this.crdtNodes[OpId.root()] = {
-                id: OpId.root(),
-                parentId: null,
-                childIds: [],
-                tagName: 'div',
-                text: null,
-                deleted: false,
-            }
-
             this.domElements[OpId.root()] = this.editorEl
         })
 
@@ -194,21 +181,16 @@ export class Editor extends EventTarget {
     }
 
     executeOperations(ops) {
-        const approvedOps = []
-        for (var i = 0; i < ops.length; i++) {
-            const op = ops[i]
-            if (this.operations[op.id]) {
-                continue
-            }
-            approvedOps.push(op)
-        }
-
         this.stopObservingMutations()
-        this.#executeOperationsUnsafe(approvedOps)
+        this.#executeOperationsUnsafe(ops)
         this.observeMutations()
     }
 
-    #editorMutationHandle(mutations, observer) {        
+    getOperations() {
+        return this.#textCrdt.getOperations()
+    }
+
+    #editorMutationHandle(mutations, observer) {
         const editorEl = this.editorEl
 
         this.stopObservingMutations()
@@ -231,7 +213,7 @@ export class Editor extends EventTarget {
                             if (node.parentNode && node.parentNode.tagName === 'SPAN') {
                                 // Put a new node outside of span that is used only for text node (a character)
                                 const leftId = OpId.tryParseStr(node.parentNode.getAttribute('data-id'))
-                                const newNodeId = this.#getNewOperationId()
+                                const newNodeId = this.#textCrdt.getNewOperationId()
 
                                 ops.push({
                                     id: newNodeId,
@@ -251,7 +233,7 @@ export class Editor extends EventTarget {
                                     const parentId = node.parentNode != editorEl ?
                                         OpId.tryParseStr(node.getAttribute('data-id')) :
                                         OpId.root()
-                                    const newNodeId = this.#getNewOperationId()
+                                    const newNodeId = this.#textCrdt.getNewOperationId()
 
                                     ops.push({
                                         id: newNodeId,
@@ -270,7 +252,7 @@ export class Editor extends EventTarget {
                         // Text
                         else if (node.nodeType === 3) {
                             if (node.parentNode.childNodes.length == 1) {
-                                const opIdNewSpan = this.#getNewOperationId()
+                                const opIdNewSpan = this.#textCrdt.getNewOperationId()
                                 ops.push({
                                     id: opIdNewSpan,
                                     parentId: 'root',
@@ -293,7 +275,7 @@ export class Editor extends EventTarget {
                         const targetId = OpId.tryParseStr(node.getAttribute('data-id'))
                         if (targetId) {
                             ops.push({
-                                id: this.#getNewOperationId(),
+                                id: this.#textCrdt.getNewOperationId(),
                                 targetId: targetId,
                                 type: 'del'
                             })
@@ -329,10 +311,10 @@ export class Editor extends EventTarget {
                             // to the initNode's parent.
                             const insertOnTheRight = anchorNode == target && anchorOffset == target.length
                             if (!insertOnTheRight) {
-                                parentId = this.crdtNodes[initNodeId].parentId
+                                parentId = this.#textCrdt.getNode(initNodeId).parentId
                             }
 
-                            const spanId = this.#getNewOperationId()
+                            const spanId = this.#textCrdt.getNewOperationId()
                             ops.push({
                                 id: spanId,
                                 parentId: parentId,
@@ -355,7 +337,7 @@ export class Editor extends EventTarget {
                     const leftId = target.previousSibling ? OpId.tryParseStr(target.previousSibling.getAttribute('data-id')) : null
                     const rightId = target.nextSibling ? OpId.tryParseStr(target.nextSibling.getAttribute('data-id')) : null
 
-                    const spanId = this.#getNewOperationId()
+                    const spanId = this.#textCrdt.getNewOperationId()
                     ops.push({
                         id: spanId,
                         parentId: 'root',
@@ -385,86 +367,13 @@ export class Editor extends EventTarget {
         if (targetCaret.leftId) {
             const selection = window.getSelection()
 
-            const nodeOnTheLeftId = this.#getNonDeletedLeftId(targetCaret.leftId)
+            const nodeOnTheLeftId = this.#textCrdt.getNonDeletedLeftId(targetCaret.leftId)
             if (nodeOnTheLeftId) {
                 const anchorNode = this.domElements[nodeOnTheLeftId]
                 selection.setBaseAndExtent(anchorNode, 1, anchorNode, 1)
             }
         }
     }
-
-    #getNewOperationId() {
-        this.counter++
-        return new OpId(this.counter, this.id)
-    }
-
-    #getTailId(id) {
-        const node = this.crdtNodes[id]
-        if (node.childIds.length == 0) {
-            return id
-        }
-
-        return this.#getTailId(node.childIds[node.childIds.length - 1])
-    }
-
-    #getNonDeletedTailNode(id, startAfterId) {
-        const node = this.crdtNodes[id]
-
-        let nonDeletedChildNode = null
-        let startLookingInChildren = startAfterId ? false : true
-
-        for (let i = node.childIds.length - 1; i >= 0; i--) {
-            const childNode = this.crdtNodes[node.childIds[i]]
-
-            if (startLookingInChildren) {
-                // Go down and look for a tail non deleted child node.
-                // We do it recursively till we find the tail
-                nonDeletedChildNode = this.#getNonDeletedTailNode(node.childIds[i], null)
-                if (nonDeletedChildNode != null) {
-                    break
-                }
-            }
-            else if (startAfterId && OpId.equals(childNode.id, startAfterId)) {
-                startLookingInChildren = true
-            }
-        }
-
-        if (nonDeletedChildNode == null && !node.deleted) {
-            // Return the tail that is not deleted
-            return node
-        }
-        else if (nonDeletedChildNode == null && node.parentId != null) {
-            // Go up because we haven't got a non-deleted tail node yet
-            return this.#getNonDeletedTailNode(node.parentId, node.id)
-        }
-        else {
-            // Return a non-deleted tail child node. That is the final step.
-            // We ether have a node or null here
-            return nonDeletedChildNode
-        }
-    }
-
-    /**
-     * Find a target non deleted left id. It goes left until it finds a non-deleted node
-     */
-    #getNonDeletedLeftId(id) {
-        if (!id) {
-            return null
-        }
-
-        const node = this.crdtNodes[id]
-        if (!node.deleted) {
-            return id
-        }
-
-        if (!node.parentId) {
-            return null
-        }
-
-        const nonDeletedTail = this.#getNonDeletedTailNode(node.parentId, id)
-        return nonDeletedTail ? nonDeletedTail.id : null
-    }
-
 
     #executeOperationsUnsafe(ops) {
         const editorEl = this.editorEl
@@ -473,90 +382,8 @@ export class Editor extends EventTarget {
             return
         }
 
-        for (var opi = 0; opi < ops.length; opi++) {
-            const op = ops[opi]
-
-            // Increase the local counter if the op's counter is larger.
-            // We do it because we use the counter as a 'Lamport timestamp'
-            // to insert nodes in a desirable order.
-            // So newer nodes can be inserted in front of old nodes, eg.
-            // any time we insert something in between of nodes
-            const newOpCounter = op.id.getCounter()
-            if (newOpCounter > this.counter) {
-                this.counter = newOpCounter
-            }
-
+        this.#textCrdt.executeOperations(ops, (op, targetLeftId) => {
             if (op.type == 'add') {
-
-                // First make sure that needed nodes already exist. If not then 
-                // save the operation for later, when a node appears
-                if (!this.crdtNodes.hasOwnProperty(op.parentId)) {
-                    let arr = []
-                    if (this.#opsWithMissingParentId.hasOwnProperty(op.parentId)) {
-                        arr = this.#opsWithMissingParentId[op.parentId]
-                    }
-                    arr.push(op)
-                    this.#opsWithMissingParentId[op.parentId] = arr
-                    continue
-                }
-
-                if (op.leftId != null && !this.crdtNodes.hasOwnProperty(op.leftId)) {
-                    let arr = []
-                    if (this.#opsWithMissingLeftId.hasOwnProperty(op.leftId)) {
-                        arr = this.#opsWithMissingLeftId[op.leftId]
-                    }
-                    arr.push(op)
-
-                    this.#opsWithMissingLeftId[op.leftId] = arr
-
-                    continue
-                }
-
-
-                let targetLeftId = null
-                let indexOfInsertion = 0
-                const parentNode = this.crdtNodes[op.parentId]
-                const childIds = parentNode.childIds
-
-                if (childIds.length > 0) {
-                    targetLeftId = op.parentId
-
-                    indexOfInsertion = 0
-                    // Find an appropriate ID and index to insert after
-                    for (let i = 0; i < childIds.length; i++) {
-                        const childId = childIds[i]
-                        if (op.id.isGreaterThan(childId)) {
-                            break
-                        }
-
-                        targetLeftId = childId
-                        indexOfInsertion++
-                    }
-
-                    if (indexOfInsertion > 0) {
-                        // Insert at the tail of the targetLeftId because the target
-                        // may have its own children
-                        targetLeftId = this.#getTailId(targetLeftId)
-                    }
-                } else {
-                    targetLeftId = op.parentId
-                }
-
-                if (OpId.equals(targetLeftId, OpId.root())) {
-                    targetLeftId = null
-                }
-
-                parentNode.childIds.splice(indexOfInsertion, 0, op.id)
-
-                this.crdtNodes[op.id] = {
-                    id: op.id,
-                    parentId: op.parentId,
-                    childIds: [],
-                    tagName: op.tagName,
-                    text: String(op.text),
-                    deleted: false,
-                }
-
 
                 const newEl = element(op.tagName, editorEl)
                 newEl.setAttribute('data-id', op.id)
@@ -564,8 +391,6 @@ export class Editor extends EventTarget {
                 if (op.text) {
                     newEl.innerText = op.text
                 }
-
-                targetLeftId = this.#getNonDeletedLeftId(targetLeftId)
 
                 const actualRoot = this.editorEl
                 const leftEl = targetLeftId ? this.domElements[targetLeftId] : null
@@ -578,45 +403,14 @@ export class Editor extends EventTarget {
 
                 this.domElements[op.id] = newEl
 
-
-                if (this.#opsWithMissingParentId.hasOwnProperty(op.id)) {
-                    const ops = this.#opsWithMissingParentId[op.id]
-                    if (ops && ops.length > 0) {
-                        this.#executeOperationsUnsafe(ops)
-                    }
-                }
-
-                if (this.#delOpsWithMissingTargetId.hasOwnProperty(op.id)) {
-                    const ops = this.#delOpsWithMissingTargetId[op.id]
-                    if (ops && ops.length > 0) {
-                        this.#executeOperationsUnsafe(ops)
-                    }
-                }
             } else if (op.type == 'del') {
-                if (!this.crdtNodes.hasOwnProperty(op.targetId)) {
-                    let arr = []
-                    if (this.#delOpsWithMissingTargetId.hasOwnProperty(op.targetId)) {
-                        arr = this.#delOpsWithMissingTargetId[op.targetId]
-                    }
-                    arr.push(op)
-
-                    this.#delOpsWithMissingTargetId[op.targetId] = arr
-
-                    continue
-                }
-
-                const node = this.crdtNodes[op.targetId]
-                node.deleted = true
-
                 const element = this.domElements[op.targetId]
                 if (element) {
                     element.remove()
                     delete this.domElements[op.targetId]
                 }
             }
-
-            this.operations[op.id] = op
-        }
+        })
     }
 
     #editorPasteHandle(e) {
