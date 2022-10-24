@@ -1,121 +1,7 @@
-console.log('Start Toy Editor')
+import { element, div, span, nodeHasDataId } from "/js/utils.js"
+import { OpId } from "/js/crdt/opId.js"
 
-function div(inElement, callback) {
-    return element('div', inElement, callback)
-}
-
-function span(inElement, callback) {
-    return element('span', inElement, callback)
-}
-
-function element(tagName, inElement, callback) {
-    const newEl = document.createElement(tagName)
-    inElement.appendChild(newEl)
-    callback && callback(newEl)
-    return newEl
-}
-
-function nodeHasDataId(nodes) {
-    for (var i = 0; i < nodes.length; i++) {
-        if (nodes[i].getAttribute('data-id')) {
-            return true
-        }
-    }
-
-    return false
-}
-
-class OpId {
-    #peerId
-    #counter
-
-    static compare(opIdA, opIdB) {
-        if (opIdA instanceof OpId === false) {
-            opIdA = OpId.tryParseStr(opIdA)
-        }
-        if (opIdB instanceof OpId === false) {
-            opIdB = OpId.tryParseStr(opIdB)
-        }
-
-        const counterA = opIdA.getCounter()
-        const counterB = opIdB.getCounter()
-
-        if (counterA > counterB) {
-            return 1
-        }
-        else if (counterA < counterB) {
-            return -1
-        }
-        else {
-            const comparePeerId = opIdA.getPeerId().localeCompare(opIdB.getPeerId())
-            return comparePeerId
-        }
-    }
-
-    static equals(opIdA, opIdB) {
-        if (opIdA == null && opIdB == null) {
-            return true
-        }
-        else if (!opIdA || !opIdB) {
-            return false
-        }
-
-        return OpId.compare(opIdA, opIdB) == 0
-    }
-
-    static tryParseStr(opIdStr) {
-        if (!opIdStr) {
-            return null
-        }
-
-        if (opIdStr == 'root') {
-            return this.root()
-        }
-
-        const parts = opIdStr.split('@')
-
-        if (parts.length != 2) {
-            return null
-        }
-
-        return new OpId(parts[0], parts[1])
-    }
-
-    static root() {
-        return new OpId(0, '')
-    }
-
-    constructor(counter, peerId) {
-        this.#counter = counter
-        this.#peerId = peerId
-    }
-
-    isRoot() {
-        return this.#peerId === '' && this.#counter === 0
-    }
-
-    getPeerId() {
-        return this.#peerId
-    }
-
-    getCounter() {
-        return this.#counter
-    }
-
-    isGreaterThan(opId) {
-        return OpId.compare(this, opId) == 1
-    }
-
-    toString() {
-        if (this.isRoot()) {
-            return 'root'
-        }
-
-        return this.#counter + '@' + this.#peerId
-    }
-}
-
-class Editor extends EventTarget {
+export class Editor extends EventTarget {
 
     static #mutationConfig = {
         //attributes: true,
@@ -132,8 +18,6 @@ class Editor extends EventTarget {
     domElements = {}
     crdtNodes = {}
     operations = {}
-    #headNodeId = null
-    #tailNodeId = null
     #opsWithMissingLeftId = {}
     #opsWithMissingParentId = {}
     #delOpsWithMissingTargetId = {}
@@ -324,7 +208,7 @@ class Editor extends EventTarget {
         this.observeMutations()
     }
 
-    #editorMutationHandle(mutations, observer) {
+    #editorMutationHandle(mutations, observer) {        
         const editorEl = this.editorEl
 
         this.stopObservingMutations()
@@ -738,94 +622,4 @@ class Editor extends EventTarget {
     #editorPasteHandle(e) {
         e.preventDefault()
     }
-}
-
-const mainContainerEl = document.getElementById('editors')
-
-const editors = [
-    new Editor(mainContainerEl, 'A'),
-    new Editor(mainContainerEl, 'B'),
-    new Editor(mainContainerEl, 'C'),
-]
-
-editors.forEach(editor => {
-    editor.addEventListener('operationsExecuted', editorOperationsHandle)
-    editor.addEventListener('online', editorSetOnlineHandle)
-})
-
-function editorOperationsHandle(event) {
-    const executiveEditor = editors.find(editor => editor.id == event.detail.editorId)
-
-    if (!executiveEditor.getOnline()) {
-        return
-    }
-
-    editors.forEach(editor => {
-        if (editor.id != executiveEditor.id && editor.getOnline()) {
-            editor.executeOperations(event.detail.operations)
-        }
-    })
-}
-
-function shuffleArray_Test(array) {
-    let currentIndex = array.length, randomIndex
-
-    // While there remain elements to shuffle.
-    while (currentIndex != 0) {
-
-        // Pick a remaining element.
-        randomIndex = Math.floor(Math.random() * currentIndex)
-        currentIndex--
-
-        // And swap it with the current element.
-        [array[currentIndex], array[randomIndex]] = [
-            array[randomIndex], array[currentIndex]]
-    }
-
-    return array
-}
-
-function editorSetOnlineHandle(event) {
-    const { online, editorId } = event.detail
-
-    // Handle the editor going back online
-    if (!online) {
-        return
-    }
-
-    const currentEditor = editors.find(editor => editor.id == editorId)
-
-    // Sync changes from the editor that was offline to its online peers
-    {
-        const ops = Object.values(currentEditor.operations)
-
-        shuffleArray_Test(ops)
-
-        editors.forEach(editor => {
-            if (editor.id != editorId && editor.getOnline()) {
-                editor.executeOperations(ops)
-            }
-        })
-    }
-
-    // Sync changes from online peers to the editor that was offline
-    {
-        let opsSet = {}
-
-        editors.forEach(editor => {
-            if (editor.id != editorId && editor.getOnline()) {
-                opsSet = {
-                    ...opsSet,
-                    ...editor.operations
-                }
-            }
-        })
-
-        const ops = Object.values(opsSet)
-
-        shuffleArray_Test(ops)
-
-        currentEditor.executeOperations(ops)
-    }
-
 }

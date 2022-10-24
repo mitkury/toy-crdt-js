@@ -1,5 +1,6 @@
 #editors {
     width: 100%;
+    max-width: 100%;
     margin-top: 50px;
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -15,6 +16,7 @@
     background-color: #fff;
     padding: 5px;
     overflow-wrap: break-word;
+    line-break: anywhere;
 }
 
 .editor p {
