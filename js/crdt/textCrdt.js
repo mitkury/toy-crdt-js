@@ -1,12 +1,10 @@
 import { OpId } from "/js/crdt/opId.js"
 
 export class TextCrdt {
-
     id = null
     counter = 0
     crdtNodes = {}
     operations = {}
-    #opsWithMissingLeftId = {}
     #opsWithMissingParentId = {}
     #delOpsWithMissingTargetId = {}
 
@@ -68,18 +66,6 @@ export class TextCrdt {
                     }
                     arr.push(op)
                     this.#opsWithMissingParentId[op.parentId] = arr
-                    continue
-                }
-
-                if (op.leftId != null && !this.crdtNodes.hasOwnProperty(op.leftId)) {
-                    let arr = []
-                    if (this.#opsWithMissingLeftId.hasOwnProperty(op.leftId)) {
-                        arr = this.#opsWithMissingLeftId[op.leftId]
-                    }
-                    arr.push(op)
-
-                    this.#opsWithMissingLeftId[op.leftId] = arr
-
                     continue
                 }
 

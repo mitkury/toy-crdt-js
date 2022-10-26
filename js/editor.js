@@ -50,7 +50,7 @@ export class Editor extends EventTarget {
                 editorEl.setAttribute('id', id)
                 editorEl.setAttribute('data-id', 'root')
                 editorEl.setAttribute('contenteditable', 'true')
-                editorEl.addEventListener('paste', this.#editorPasteHandle)
+                editorEl.addEventListener('paste', e => this.#editorPasteHandle(e))
                 editorEl.addEventListener('keydown', e => {
                     if (e.key === 'Enter') {
                         e.preventDefault()
@@ -413,7 +413,95 @@ export class Editor extends EventTarget {
         })
     }
 
+    #getTargetParentIdFromSelection() {
+        let targetParentId = null
+
+        const selection = window.getSelection()
+        const anchorNode = selection.anchorNode
+
+        // Text node (inside a node with 'data-id')
+        if (anchorNode.nodeType === 3) {
+            targetParentId = OpId.tryParseStr(anchorNode.parentNode.getAttribute('data-id'))
+
+        }
+        // Node with 'data-id' 
+        else {
+            targetParentId = OpId.tryParseStr(anchorNode.getAttribute('data-id'))
+        }
+
+        // In that case we insert the new line before the anchor
+        if (selection.anchorOffset == 0 && targetParentId) {
+            // Try to get the non-deleted node on the left
+            // If the element exists in the editor we assume
+            // it's not deleted
+            let elementOnTheLeft = this.domElements[targetParentId].previousSibling
+            if (elementOnTheLeft != null) {
+                targetParentId = elementOnTheLeft.getAttribute('data-id')
+            } else {
+                targetParentId = OpId.root()
+            }
+        }
+
+        return targetParentId
+    }
+
+    #getSelectedNodes() {
+        const selection = window.getSelection()
+        // TODO: support multiple ranges
+        return selection.getRangeAt(0).cloneContents().querySelectorAll("[data-id]")
+    }
+
     #editorPasteHandle(e) {
         e.preventDefault()
+
+        let targetParentId = this.#getTargetParentIdFromSelection()
+
+        if (targetParentId == null) {
+            return
+        }
+
+        const ops = []
+
+        // First detect and delete selected nodes
+        const selectedNodes = this.#getSelectedNodes()
+        for (let i = 0; i < selectedNodes.length; i++) {
+            const targetId = selectedNodes[i].getAttribute('data-id')
+            ops.push({
+                id: this.#textCrdt.getNewOperationId(),
+                targetId: targetId,
+                type: 'del'
+            })
+        }
+
+        const pastedStr = e.clipboardData.getData('text/plain')
+        for (let i = 0; i < pastedStr.length; i++) {
+            const newOpId = this.#textCrdt.getNewOperationId()
+            ops.push({
+                id: newOpId,
+                parentId: targetParentId,
+                type: 'add',
+                tagName: 'span',
+                text: pastedStr[i]
+            })
+
+            targetParentId = newOpId
+        }
+
+        this.executeOperations(ops)
+
+        // TODO: refactor a bit
+        this.caret = {
+            leftId: targetParentId
+        }
+        const targetCaret = this.caret
+        if (targetCaret.leftId) {
+            const selection = window.getSelection()
+
+            const nodeOnTheLeftId = this.#textCrdt.getNonDeletedLeftId(targetCaret.leftId)
+            if (nodeOnTheLeftId) {
+                const anchorNode = this.domElements[nodeOnTheLeftId]
+                selection.setBaseAndExtent(anchorNode, 1, anchorNode, 1)
+            }
+        }
     }
 }
