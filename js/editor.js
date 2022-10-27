@@ -12,14 +12,19 @@ export class Editor extends EventTarget {
         characterDataOldValue: true,
     }
 
-    editorEl = {}
-    id = null
-    domElements = {}
-    caret = null
-    observer = null
-
+    #editorEl = {}
+    #id = null
+    #domElements = {}
+    #caret = null
+    #observer = null
     #isOnline = false
     #textCrdt = null
+    #opsDidByClient = []
+    #opsUndidByClient = []
+
+    getId() {
+       return this.#id 
+    }
 
     getOnline() {
         return this.#isOnline
@@ -31,7 +36,7 @@ export class Editor extends EventTarget {
         this.dispatchEvent(new CustomEvent('online', {
             detail: {
                 online: value,
-                editorId: this.id
+                editorId: this.#id
             }
         }))
     }
@@ -39,18 +44,24 @@ export class Editor extends EventTarget {
     constructor(inElement, id) {
         super()
 
-        this.id = id
+        this.#id = id
         this.#textCrdt = new TextCrdt(id)
 
         div(inElement, containerEl => {
             containerEl.classList.add('editor')
 
-            this.editorEl = div(containerEl, editorEl => {
+            this.#editorEl = div(containerEl, editorEl => {
                 editorEl.classList.add('content')
                 editorEl.setAttribute('id', id)
                 editorEl.setAttribute('data-id', 'root')
                 editorEl.setAttribute('contenteditable', 'true')
                 editorEl.addEventListener('paste', e => this.#editorPasteHandle(e))
+                editorEl.addEventListener('beforeinput', e => {
+                    switch (e.inputType) {
+                        case "historyUndo": e.preventDefault(); break;
+                        case "historyRedo": e.preventDefault(); break;
+                    }
+                })
                 editorEl.addEventListener('keydown', e => {
                     if (e.key === 'Enter') {
                         e.preventDefault()
@@ -75,7 +86,7 @@ export class Editor extends EventTarget {
                             // Try to get the non-deleted node on the left
                             // If the element exists in the editor we assume
                             // it's not deleted
-                            let elementOnTheLeft = this.domElements[anchorParentId].previousSibling
+                            let elementOnTheLeft = this.#domElements[anchorParentId].previousSibling
                             if (elementOnTheLeft != null) {
                                 anchorParentId = elementOnTheLeft.getAttribute('data-id')
                             } else {
@@ -107,13 +118,13 @@ export class Editor extends EventTarget {
 
                         this.dispatchEvent(new CustomEvent('operationsExecuted', {
                             detail: {
-                                editorId: this.id,
+                                editorId: this.#id,
                                 operations: ops
                             }
                         }))
 
                         // Put the caret inside the span element
-                        const newAnchorNode = this.domElements[newSpanId]
+                        const newAnchorNode = this.#domElements[newSpanId]
                         selection.setBaseAndExtent(newAnchorNode, 1, newAnchorNode, 1)
                     }
                 })
@@ -123,7 +134,7 @@ export class Editor extends EventTarget {
                 controlsEl.classList.add('controls')
 
                 const checkbox = document.createElement('input')
-                const checkboxId = this.id + '-online'
+                const checkboxId = this.#id + '-online'
                 checkbox.setAttribute('type', 'checkbox')
                 checkbox.setAttribute('id', checkboxId)
                 checkbox.checked = this.#isOnline
@@ -138,10 +149,10 @@ export class Editor extends EventTarget {
                 controlsEl.appendChild(label)
             })
 
-            this.domElements[OpId.root()] = this.editorEl
+            this.#domElements[OpId.root()] = this.#editorEl
         })
 
-        this.observer = new MutationObserver((mutations, observer) =>
+        this.#observer = new MutationObserver((mutations, observer) =>
             this.#editorMutationHandle(mutations, observer)
         )
 
@@ -173,11 +184,11 @@ export class Editor extends EventTarget {
     }
 
     observeMutations() {
-        this.observer.observe(this.editorEl, Editor.#mutationConfig)
+        this.#observer.observe(this.#editorEl, Editor.#mutationConfig)
     }
 
     stopObservingMutations() {
-        this.observer.disconnect()
+        this.#observer.disconnect()
     }
 
     executeOperations(ops) {
@@ -191,13 +202,13 @@ export class Editor extends EventTarget {
     }
 
     #editorMutationHandle(mutations, observer) {
-        const editorEl = this.editorEl
+        const editorEl = this.#editorEl
 
         this.stopObservingMutations()
 
         const ops = []
 
-        const targetCaret = this.caret ? this.caret : {}
+        const targetCaret = this.#caret ? this.#caret : {}
 
         for (var i = 0; i < mutations.length; i++) {
             let mutation = mutations[i]
@@ -359,7 +370,7 @@ export class Editor extends EventTarget {
 
         this.dispatchEvent(new CustomEvent('operationsExecuted', {
             detail: {
-                editorId: this.id,
+                editorId: this.#id,
                 operations: ops
             }
         }))
@@ -369,14 +380,14 @@ export class Editor extends EventTarget {
 
             const nodeOnTheLeftId = this.#textCrdt.getNonDeletedLeftId(targetCaret.leftId)
             if (nodeOnTheLeftId) {
-                const anchorNode = this.domElements[nodeOnTheLeftId]
+                const anchorNode = this.#domElements[nodeOnTheLeftId]
                 selection.setBaseAndExtent(anchorNode, 1, anchorNode, 1)
             }
         }
     }
 
     #executeOperationsUnsafe(ops) {
-        const editorEl = this.editorEl
+        const editorEl = this.#editorEl
 
         if (!ops || ops.length == 0) {
             return
@@ -392,8 +403,8 @@ export class Editor extends EventTarget {
                     newEl.innerText = op.text
                 }
 
-                const actualRoot = this.editorEl
-                const leftEl = targetLeftId ? this.domElements[targetLeftId] : null
+                const actualRoot = this.#editorEl
+                const leftEl = targetLeftId ? this.#domElements[targetLeftId] : null
 
                 if (leftEl && leftEl.nextSibling) {
                     actualRoot.insertBefore(newEl, leftEl.nextSibling)
@@ -401,13 +412,13 @@ export class Editor extends EventTarget {
                     actualRoot.prepend(newEl)
                 }
 
-                this.domElements[op.id] = newEl
+                this.#domElements[op.id] = newEl
 
             } else if (op.type == 'del') {
-                const element = this.domElements[op.targetId]
+                const element = this.#domElements[op.targetId]
                 if (element) {
                     element.remove()
-                    delete this.domElements[op.targetId]
+                    delete this.#domElements[op.targetId]
                 }
             }
         })
@@ -434,7 +445,7 @@ export class Editor extends EventTarget {
             // Try to get the non-deleted node on the left
             // If the element exists in the editor we assume
             // it's not deleted
-            let elementOnTheLeft = this.domElements[targetParentId].previousSibling
+            let elementOnTheLeft = this.#domElements[targetParentId].previousSibling
             if (elementOnTheLeft != null) {
                 targetParentId = elementOnTheLeft.getAttribute('data-id')
             } else {
@@ -493,13 +504,13 @@ export class Editor extends EventTarget {
         this.caret = {
             leftId: targetParentId
         }
-        const targetCaret = this.caret
+        const targetCaret = this.#caret
         if (targetCaret.leftId) {
             const selection = window.getSelection()
 
             const nodeOnTheLeftId = this.#textCrdt.getNonDeletedLeftId(targetCaret.leftId)
             if (nodeOnTheLeftId) {
-                const anchorNode = this.domElements[nodeOnTheLeftId]
+                const anchorNode = this.#domElements[nodeOnTheLeftId]
                 selection.setBaseAndExtent(anchorNode, 1, anchorNode, 1)
             }
         }

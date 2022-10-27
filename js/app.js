@@ -16,14 +16,14 @@ editors.forEach(editor => {
 })
 
 function editorOperationsHandle(event) {
-    const executiveEditor = editors.find(editor => editor.id == event.detail.editorId)
+    const executiveEditor = editors.find(editor => editor.getId() == event.detail.editorId)
 
     if (!executiveEditor.getOnline()) {
         return
     }
 
     editors.forEach(editor => {
-        if (editor.id != executiveEditor.id && editor.getOnline()) {
+        if (editor.getId() != executiveEditor.getId() && editor.getOnline()) {
             editor.executeOperations(event.detail.operations)
         }
     })
@@ -32,14 +32,10 @@ function editorOperationsHandle(event) {
 function shuffleArray_Test(array) {
     let currentIndex = array.length, randomIndex
 
-    // While there remain elements to shuffle.
     while (currentIndex != 0) {
-
-        // Pick a remaining element.
         randomIndex = Math.floor(Math.random() * currentIndex)
         currentIndex--
 
-        // And swap it with the current element.
         [array[currentIndex], array[randomIndex]] = [
             array[randomIndex], array[currentIndex]]
     }
@@ -55,7 +51,7 @@ function editorSetOnlineHandle(event) {
         return
     }
 
-    const currentEditor = editors.find(editor => editor.id == editorId)
+    const currentEditor = editors.find(editor => editor.getId() == editorId)
 
     // Sync changes from the editor that was offline to its online peers
     {
@@ -64,7 +60,7 @@ function editorSetOnlineHandle(event) {
         //shuffleArray_Test(ops)
 
         editors.forEach(editor => {
-            if (editor.id != editorId && editor.getOnline()) {
+            if (editor.getId() != editorId && editor.getOnline()) {
                 editor.executeOperations(ops)
             }
         })
@@ -75,7 +71,7 @@ function editorSetOnlineHandle(event) {
         let ops = []
 
         editors.forEach(editor => {
-            if (editor.id != editorId && editor.getOnline()) {
+            if (editor.getId() != editorId && editor.getOnline()) {
                 ops = [
                     ...ops,
                     ...editor.getOperations()
