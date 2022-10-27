@@ -180,31 +180,31 @@ export class Editor extends EventTarget {
             }
         })
 
-        this.observeMutations()
-    }
-
-    observeMutations() {
-        this.#observer.observe(this.#editorEl, Editor.#mutationConfig)
-    }
-
-    stopObservingMutations() {
-        this.#observer.disconnect()
+        this.#observeMutations()
     }
 
     executeOperations(ops) {
-        this.stopObservingMutations()
+        this.#stopObservingMutations()
         this.#executeOperationsUnsafe(ops)
-        this.observeMutations()
+        this.#observeMutations()
     }
 
     getOperations() {
         return this.#textCrdt.getOperations()
     }
 
+    #observeMutations() {
+        this.#observer.observe(this.#editorEl, Editor.#mutationConfig)
+    }
+
+    #stopObservingMutations() {
+        this.#observer.disconnect()
+    }
+
     #editorMutationHandle(mutations, observer) {
         const editorEl = this.#editorEl
 
-        this.stopObservingMutations()
+        this.#stopObservingMutations()
 
         const ops = []
 
@@ -366,7 +366,7 @@ export class Editor extends EventTarget {
 
         this.#executeOperationsUnsafe(ops)
 
-        this.observeMutations()
+        this.#observeMutations()
 
         this.dispatchEvent(new CustomEvent('operationsExecuted', {
             detail: {
