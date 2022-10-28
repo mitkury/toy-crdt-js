@@ -1,16 +1,9 @@
 import { element, div, span, nodeHasDataId } from "/js/utils.js"
 import { OpId } from "/js/crdt/opId.js"
 import { TextCrdt } from "/js/crdt/textCrdt.js"
+import { ActivationOperation, CreationOperation } from "/js/crdt/operations.js"
 
 export class Editor extends EventTarget {
-
-    static #mutationConfig = {
-        childList: true,
-        subtree: true,
-        characterData: true,
-        attributeOldValue: true,
-        characterDataOldValue: true,
-    }
 
     #editorEl = {}
     #id = null
@@ -20,10 +13,10 @@ export class Editor extends EventTarget {
     #isOnline = false
     #textCrdt = null
     #opsDidByClient = []
-    #opsUndidByClient = []
+    #undoIndex = 0
 
     getId() {
-       return this.#id 
+        return this.#id
     }
 
     getOnline() {
@@ -39,6 +32,50 @@ export class Editor extends EventTarget {
                 editorId: this.#id
             }
         }))
+    }
+
+    #handleUndo(e) {
+        e.preventDefault()
+
+        if (this.#opsDidByClient.length == 0) {
+            return
+        }
+
+        const opToUndo = this.#textCrdt.operations[this.#opsDidByClient[this.#undoIndex]]
+        this.#undoIndex--
+
+        let reverseOp = null
+
+        if (opToUndo instanceof CreationOperation) {
+            reverseOp = new ActivationOperation(
+                this.#textCrdt.getNewOperationId(),
+                opToUndo.id,
+                false
+            )
+        } else if (opToUndo instanceof ActivationOperation) {
+            // TODO: implement
+            if (opToUndo.isSetToActivate()) {
+
+            } else {
+
+            }
+
+            /*
+            const creationOp = this.#textCrdt.operations[opToUndo.targetId]
+            reverseOp = {
+                ...creationOp
+            }
+            
+            reverseop.getId() = this.#textCrdt.getNewOperationId()
+            */
+        }
+
+        this.executeOperations([reverseOp])
+        this.#addOpIdsToArrayOfOpsDidByClient([reverseOp], true)
+    }
+
+    #handleRedo(e) {
+        e.preventDefault()
     }
 
     constructor(inElement, id) {
@@ -58,8 +95,8 @@ export class Editor extends EventTarget {
                 editorEl.addEventListener('paste', e => this.#editorPasteHandle(e))
                 editorEl.addEventListener('beforeinput', e => {
                     switch (e.inputType) {
-                        case "historyUndo": e.preventDefault(); break;
-                        case "historyRedo": e.preventDefault(); break;
+                        case "historyUndo": this.#handleUndo(e); break
+                        case "historyRedo": this.#handleRedo(e); break
                     }
                 })
                 editorEl.addEventListener('keydown', e => {
@@ -98,23 +135,23 @@ export class Editor extends EventTarget {
                         const newBrId = this.#textCrdt.getNewOperationId()
                         const newSpanId = this.#textCrdt.getNewOperationId()
                         const ops = []
-                        ops.push({
-                            id: newBrId,
-                            parentId: anchorParentId,
-                            type: 'add',
-                            tagName: 'br',
-
-                        })
-                        ops.push({
-                            id: newSpanId,
-                            parentId: newBrId,
-                            type: 'add',
-                            tagName: 'span',
-                            // Insert 'zero width space' in the span. Otherwise the caret doesn't want to go into an element without a text node
-                            text: '\u200B'
-                        })
+                        ops.push(new CreationOperation(
+                            newBrId,
+                            anchorParentId,
+                            null,
+                            'br'
+                        ))
+                        ops.push(new CreationOperation(
+                            newSpanId,
+                            newBrId,
+                            // Insert 'zero width space' in the span. Otherwise the caret 
+                            // doesn't want to go into an element without a text node
+                            '\u200B',
+                            'span'
+                        ))
 
                         this.executeOperations(ops)
+                        this.#addOpIdsToArrayOfOpsDidByClient(ops)
 
                         this.dispatchEvent(new CustomEvent('operationsExecuted', {
                             detail: {
@@ -193,6 +230,14 @@ export class Editor extends EventTarget {
         return this.#textCrdt.getOperations()
     }
 
+    static #mutationConfig = {
+        childList: true,
+        subtree: true,
+        characterData: true,
+        attributeOldValue: true,
+        characterDataOldValue: true,
+    }
+
     #observeMutations() {
         this.#observer.observe(this.#editorEl, Editor.#mutationConfig)
     }
@@ -226,12 +271,12 @@ export class Editor extends EventTarget {
                                 const leftId = OpId.tryParseStr(node.parentNode.getAttribute('data-id'))
                                 const newNodeId = this.#textCrdt.getNewOperationId()
 
-                                ops.push({
-                                    id: newNodeId,
-                                    parentId: leftId,
-                                    type: 'add',
-                                    tagName: node.tagName,
-                                })
+                                ops.push(new CreationOperation(
+                                    newNodeId,
+                                    leftId,
+                                    null,
+                                    node.tagName
+                                ))
 
                                 targetCaret.leftId = newNodeId
                             }
@@ -246,13 +291,12 @@ export class Editor extends EventTarget {
                                         OpId.root()
                                     const newNodeId = this.#textCrdt.getNewOperationId()
 
-                                    ops.push({
-                                        id: newNodeId,
-                                        parentId: parentId,
-                                        type: 'add',
-                                        tagName: node.tagName,
-
-                                    })
+                                    ops.push(new CreationOperation(
+                                        newNodeId,
+                                        parentId,
+                                        null,
+                                        node.tagName
+                                    ))
 
                                     targetCaret.leftId = newNodeId
                                 }
@@ -264,13 +308,12 @@ export class Editor extends EventTarget {
                         else if (node.nodeType === 3) {
                             if (node.parentNode.childNodes.length == 1) {
                                 const opIdNewSpan = this.#textCrdt.getNewOperationId()
-                                ops.push({
-                                    id: opIdNewSpan,
-                                    parentId: 'root',
-                                    type: 'add',
-                                    tagName: 'span',
-                                    text: String(node.textContent)
-                                })
+                                ops.push(new CreationOperation(
+                                    opIdNewSpan,
+                                    'root',
+                                    String(node.textContent),
+                                    'span'
+                                ))
 
                                 targetCaret.leftId = opIdNewSpan
 
@@ -285,11 +328,11 @@ export class Editor extends EventTarget {
                         const node = mutation.removedNodes[j]
                         const targetId = OpId.tryParseStr(node.getAttribute('data-id'))
                         if (targetId) {
-                            ops.push({
-                                id: this.#textCrdt.getNewOperationId(),
-                                targetId: targetId,
-                                type: 'del'
-                            })
+                            ops.push(new ActivationOperation(
+                                this.#textCrdt.getNewOperationId(),
+                                targetId,
+                                false
+                            ))
                         } else {
 
                         }
@@ -326,13 +369,12 @@ export class Editor extends EventTarget {
                             }
 
                             const spanId = this.#textCrdt.getNewOperationId()
-                            ops.push({
-                                id: spanId,
-                                parentId: parentId,
-                                type: 'add',
-                                tagName: 'span',
-                                text: String(newText)
-                            })
+                            ops.push(new CreationOperation(
+                                spanId,
+                                parentId,
+                                String(newText),
+                                'span'
+                            ))
 
                             targetCaret.leftId = spanId
 
@@ -349,13 +391,12 @@ export class Editor extends EventTarget {
                     const rightId = target.nextSibling ? OpId.tryParseStr(target.nextSibling.getAttribute('data-id')) : null
 
                     const spanId = this.#textCrdt.getNewOperationId()
-                    ops.push({
-                        id: spanId,
-                        parentId: 'root',
-                        type: 'add',
-                        tagName: 'span',
-                        text: String(targetText)
-                    })
+                    ops.push(new CreationOperation(
+                        spanId,
+                        'root',
+                        String(targetText),
+                        'span'
+                    ))
 
                     targetCaret.leftId = spanId
 
@@ -365,6 +406,7 @@ export class Editor extends EventTarget {
         }
 
         this.#executeOperationsUnsafe(ops)
+        this.#addOpIdsToArrayOfOpsDidByClient(ops)
 
         this.#observeMutations()
 
@@ -394,13 +436,13 @@ export class Editor extends EventTarget {
         }
 
         this.#textCrdt.executeOperations(ops, (op, targetLeftId) => {
-            if (op.type == 'add') {
+            if (op instanceof CreationOperation) {
 
-                const newEl = element(op.tagName, editorEl)
-                newEl.setAttribute('data-id', op.id)
+                const newEl = element(op.getTagName(), editorEl)
+                newEl.setAttribute('data-id', op.getId())
 
-                if (op.text) {
-                    newEl.innerText = op.text
+                if (op.getValue()) {
+                    newEl.innerText = op.getValue()
                 }
 
                 const actualRoot = this.#editorEl
@@ -412,16 +454,33 @@ export class Editor extends EventTarget {
                     actualRoot.prepend(newEl)
                 }
 
-                this.#domElements[op.id] = newEl
+                this.#domElements[op.getId()] = newEl
 
-            } else if (op.type == 'del') {
-                const element = this.#domElements[op.targetId]
-                if (element) {
-                    element.remove()
-                    delete this.#domElements[op.targetId]
+            } else if (op instanceof ActivationOperation) {
+
+                if (!op.isSetToActivate()) {
+                    const element = this.#domElements[op.getTargetId()]
+                    if (element) {
+                        element.remove()
+                        delete this.#domElements[op.getTargetId()]
+                    }
+                } else {
+                    // TODO: implement activation / re-creation
                 }
+
             }
         })
+    }
+
+    #addOpIdsToArrayOfOpsDidByClient(ops, dontResetIndex) {
+        // TODO: consider scoping those ops so it's possible to undo them in one go
+        const opIds = ops.map(o => o.id)
+        this.#opsDidByClient.push(...opIds)
+
+        if (!dontResetIndex) {
+            // Reset the index
+            this.#undoIndex = this.#opsDidByClient.length - 1
+        }
     }
 
     #getTargetParentIdFromSelection() {
@@ -477,28 +536,28 @@ export class Editor extends EventTarget {
         const selectedNodes = this.#getSelectedNodes()
         for (let i = 0; i < selectedNodes.length; i++) {
             const targetId = selectedNodes[i].getAttribute('data-id')
-            ops.push({
-                id: this.#textCrdt.getNewOperationId(),
-                targetId: targetId,
-                type: 'del'
-            })
+            ops.push(new ActivationOperation(
+                this.#textCrdt.getNewOperationId(),
+                targetId,
+                false
+            ))
         }
 
         const pastedStr = e.clipboardData.getData('text/plain')
         for (let i = 0; i < pastedStr.length; i++) {
             const newOpId = this.#textCrdt.getNewOperationId()
-            ops.push({
-                id: newOpId,
-                parentId: targetParentId,
-                type: 'add',
-                tagName: 'span',
-                text: pastedStr[i]
-            })
+            ops.push(new CreationOperation(
+                newOpId,
+                targetParentId,
+                pastedStr[i],
+                'span'
+            ))
 
             targetParentId = newOpId
         }
 
         this.executeOperations(ops)
+        this.#addOpIdsToArrayOfOpsDidByClient(ops)
 
         // TODO: refactor a bit
         this.caret = {

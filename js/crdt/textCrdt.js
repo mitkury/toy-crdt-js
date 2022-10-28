@@ -1,3 +1,4 @@
+import { ActivationOperation, CreationOperation } from "/js/crdt/operations.js"
 import { OpId } from "/js/crdt/opId.js"
 
 export class TextCrdt {
@@ -17,7 +18,7 @@ export class TextCrdt {
             childIds: [],
             tagName: 'div',
             text: null,
-            deleted: false,
+            isActive: true,
         }
     }
 
@@ -41,7 +42,7 @@ export class TextCrdt {
         for (var opi = 0; opi < ops.length; opi++) {
             const op = ops[opi]
 
-            if (this.hasOperation(op.id)) {
+            if (this.hasOperation(op.getId())) {
                 continue
             }
 
@@ -50,38 +51,38 @@ export class TextCrdt {
             // to insert nodes in a desirable order.
             // So newer nodes can be inserted in front of old nodes, eg.
             // any time we insert something in between of nodes
-            const newOpCounter = op.id.getCounter()
+            const newOpCounter = op.getId().getCounter()
             if (newOpCounter > this.counter) {
                 this.counter = newOpCounter
             }
 
-            if (op.type == 'add') {
+            if (op instanceof CreationOperation) {
 
                 // First make sure that needed nodes already exist. If not then 
                 // save the operation for later, when a node appears
-                if (!this.crdtNodes.hasOwnProperty(op.parentId)) {
+                if (!this.crdtNodes.hasOwnProperty(op.getParentId())) {
                     let arr = []
-                    if (this.#opsWithMissingParentId.hasOwnProperty(op.parentId)) {
-                        arr = this.#opsWithMissingParentId[op.parentId]
+                    if (this.#opsWithMissingParentId.hasOwnProperty(op.getParentId())) {
+                        arr = this.#opsWithMissingParentId[op.getParentId()]
                     }
                     arr.push(op)
-                    this.#opsWithMissingParentId[op.parentId] = arr
+                    this.#opsWithMissingParentId[op.getParentId()] = arr
                     continue
                 }
 
                 let targetLeftId = null
                 let indexOfInsertion = 0
-                const parentNode = this.crdtNodes[op.parentId]
+                const parentNode = this.crdtNodes[op.getParentId()]
                 const childIds = parentNode.childIds
 
                 if (childIds.length > 0) {
-                    targetLeftId = op.parentId
+                    targetLeftId = op.getParentId()
 
                     indexOfInsertion = 0
                     // Find an appropriate ID and index to insert after
                     for (let i = 0; i < childIds.length; i++) {
                         const childId = childIds[i]
-                        if (op.id.isGreaterThan(childId)) {
+                        if (op.getId().isGreaterThan(childId)) {
                             break
                         }
 
@@ -95,61 +96,63 @@ export class TextCrdt {
                         targetLeftId = this.#getTailId(targetLeftId)
                     }
                 } else {
-                    targetLeftId = op.parentId
+                    targetLeftId = op.getParentId()
                 }
 
                 if (OpId.equals(targetLeftId, OpId.root())) {
                     targetLeftId = null
                 }
 
-                parentNode.childIds.splice(indexOfInsertion, 0, op.id)
+                parentNode.childIds.splice(indexOfInsertion, 0, op.getId())
 
-                this.crdtNodes[op.id] = {
-                    id: op.id,
-                    parentId: op.parentId,
+                this.crdtNodes[op.getId()] = {
+                    id: op.getId(),
+                    parentId: op.getParentId(),
                     childIds: [],
-                    tagName: op.tagName,
-                    text: String(op.text),
-                    deleted: false,
+                    tagName: op.getTagName(),
+                    text: String(op.getValue()),
+                    isActive: true,
                 }
 
                 targetLeftId = this.getNonDeletedLeftId(targetLeftId)
 
                 callback(op, targetLeftId)
 
-                if (this.#opsWithMissingParentId.hasOwnProperty(op.id)) {
-                    const ops = this.#opsWithMissingParentId[op.id]
+                if (this.#opsWithMissingParentId.hasOwnProperty(op.getId())) {
+                    const ops = this.#opsWithMissingParentId[op.getId()]
                     if (ops && ops.length > 0) {
                         this.executeOperations(ops, callback)
                     }
                 }
 
-                if (this.#delOpsWithMissingTargetId.hasOwnProperty(op.id)) {
-                    const ops = this.#delOpsWithMissingTargetId[op.id]
+                if (this.#delOpsWithMissingTargetId.hasOwnProperty(op.getId())) {
+                    const ops = this.#delOpsWithMissingTargetId[op.getId()]
                     if (ops && ops.length > 0) {
                         this.executeOperations(ops, callback)
                     }
                 }
-            } else if (op.type == 'del') {
-                if (!this.crdtNodes.hasOwnProperty(op.targetId)) {
+            } else if (op instanceof ActivationOperation) {
+                if (!this.crdtNodes.hasOwnProperty(op.getTargetId())) {
                     let arr = []
-                    if (this.#delOpsWithMissingTargetId.hasOwnProperty(op.targetId)) {
-                        arr = this.#delOpsWithMissingTargetId[op.targetId]
+                    if (this.#delOpsWithMissingTargetId.hasOwnProperty(op.getTargetId())) {
+                        arr = this.#delOpsWithMissingTargetId[op.getTargetId()]
                     }
                     arr.push(op)
 
-                    this.#delOpsWithMissingTargetId[op.targetId] = arr
+                    this.#delOpsWithMissingTargetId[op.getTargetId()] = arr
 
                     continue
                 }
 
-                const node = this.crdtNodes[op.targetId]
-                node.deleted = true
-
-                callback(op)
+                const node = this.crdtNodes[op.getTargetId()]
+                if (!node.activatorId || (op.getId().isGreaterThan(node.activatorId))) {
+                    node.isActive = op.isSetToActivate
+                    node.activatorId = op.getId()
+                    callback(op)
+                } 
             }
 
-            this.operations[op.id] = op
+            this.operations[op.getId()] = op
         }
     }
 
@@ -189,7 +192,7 @@ export class TextCrdt {
             }
         }
 
-        if (nonDeletedChildNode == null && !node.deleted) {
+        if (nonDeletedChildNode == null && node.isActive) {
             // Return the tail that is not deleted
             return node
         }
@@ -213,7 +216,7 @@ export class TextCrdt {
         }
 
         const node = this.crdtNodes[id]
-        if (!node.deleted) {
+        if (node.isActive) {
             return id
         }
 
