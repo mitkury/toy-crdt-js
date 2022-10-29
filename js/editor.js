@@ -15,14 +15,23 @@ export class Editor extends EventTarget {
     #opsDidByClient = []
     #undoIndex = 0
 
+    /**
+     * @returns {OpId[]}
+     */
     getId() {
         return this.#id
     }
 
+    /**
+    * @returns {Boolean}
+    */
     getOnline() {
         return this.#isOnline
     }
 
+    /**
+    * @param {Boolean} value
+    */
     setOnline(value) {
         this.#isOnline = value
 
@@ -34,54 +43,23 @@ export class Editor extends EventTarget {
         }))
     }
 
-    #handleUndo(e) {
-        e.preventDefault()
-
-        if (this.#opsDidByClient.length == 0) {
-            return
-        }
-
-        const opToUndo = this.#textCrdt.operations[this.#opsDidByClient[this.#undoIndex]]
-        this.#undoIndex--
-
-        let reverseOp = null
-
-        if (opToUndo instanceof CreationOperation) {
-            reverseOp = new ActivationOperation(
-                this.#textCrdt.getNewOperationId(),
-                opToUndo.id,
-                false
-            )
-        } else if (opToUndo instanceof ActivationOperation) {
-            // TODO: implement
-            if (opToUndo.isSetToActivate()) {
-
-            } else {
-
-            }
-
-            /*
-            const creationOp = this.#textCrdt.operations[opToUndo.targetId]
-            reverseOp = {
-                ...creationOp
-            }
-            
-            reverseop.getId() = this.#textCrdt.getNewOperationId()
-            */
-        }
-
-        this.executeOperations([reverseOp])
-        this.#addOpIdsToArrayOfOpsDidByClient([reverseOp], true)
-    }
-
-    #handleRedo(e) {
-        e.preventDefault()
-    }
-
+    /**
+    * @param {HTMLElement} inElement
+    * @param {String} id
+    */
     constructor(inElement, id) {
         super()
 
+        /**
+         * @type {String}
+         * @private
+         */
         this.#id = id
+
+        /**
+         * @type {TextCrdt}
+         * @private
+         */
         this.#textCrdt = new TextCrdt(id)
 
         div(inElement, containerEl => {
@@ -130,7 +108,6 @@ export class Editor extends EventTarget {
                                 anchorParentId = OpId.root()
                             }
                         }
-
 
                         const newBrId = this.#textCrdt.getNewOperationId()
                         const newSpanId = this.#textCrdt.getNewOperationId()
@@ -220,12 +197,18 @@ export class Editor extends EventTarget {
         this.#observeMutations()
     }
 
+    /**
+    * @param {OpId[]} ops
+    */
     executeOperations(ops) {
         this.#stopObservingMutations()
         this.#executeOperationsUnsafe(ops)
         this.#observeMutations()
     }
 
+    /**
+    * @returns {OpId[]}
+    */
     getOperations() {
         return this.#textCrdt.getOperations()
     }
@@ -426,6 +409,50 @@ export class Editor extends EventTarget {
                 selection.setBaseAndExtent(anchorNode, 1, anchorNode, 1)
             }
         }
+    }
+
+    #handleUndo(e) {
+        e.preventDefault()
+
+        if (this.#opsDidByClient.length == 0) {
+            return
+        }
+
+        const opToUndo = this.#textCrdt.operations[this.#opsDidByClient[this.#undoIndex]]
+        this.#undoIndex--
+
+        let reverseOp = null
+
+        if (opToUndo instanceof CreationOperation) {
+            reverseOp = new ActivationOperation(
+                this.#textCrdt.getNewOperationId(),
+                opToUndo.id,
+                false
+            )
+        } else if (opToUndo instanceof ActivationOperation) {
+            // TODO: implement
+            if (opToUndo.isSetToActivate()) {
+
+            } else {
+
+            }
+
+            /*
+            const creationOp = this.#textCrdt.operations[opToUndo.targetId]
+            reverseOp = {
+                ...creationOp
+            }
+            
+            reverseop.getId() = this.#textCrdt.getNewOperationId()
+            */
+        }
+
+        this.executeOperations([reverseOp])
+        this.#addOpIdsToArrayOfOpsDidByClient([reverseOp], true)
+    }
+
+    #handleRedo(e) {
+        e.preventDefault()
     }
 
     #executeOperationsUnsafe(ops) {

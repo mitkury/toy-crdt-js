@@ -1,6 +1,9 @@
 import { ActivationOperation, CreationOperation } from "/js/crdt/operations.js"
 import { OpId } from "/js/crdt/opId.js"
 
+/**
+ * This is our text CRDT based on RGA approach
+ */
 export class TextCrdt {
     id = null
     counter = 0
@@ -9,6 +12,9 @@ export class TextCrdt {
     #opsWithMissingParentId = {}
     #delOpsWithMissingTargetId = {}
 
+    /**
+     * @param {OpId} id 
+     */
     constructor(id) { 
         this.id = id
 
@@ -22,18 +28,34 @@ export class TextCrdt {
         }
     }
 
+    /**
+     * @returns {OpId[]}
+     */
     getOperations() {
         return Object.values(this.operations)
     }
 
+    /**
+     * @param {*} id 
+     * @returns 
+     */
     getNode(id) {
         return this.crdtNodes[id]
     }
 
+    /**
+     * @param {OpId} id 
+     * @returns {Boolean}
+     */
     hasOperation(id) {
         return this.operations[id] ? true : false
     }
 
+    /**
+     * 
+     * @param {OpId[]} ops 
+     * @param {*} callback 
+     */
     executeOperations(ops, callback) {
         if (!ops || ops.length == 0) {
             return
@@ -156,11 +178,24 @@ export class TextCrdt {
         }
     }
 
+    /**
+     * Get a new Operation ID with the increased local clock
+     * @returns {OpId} 
+     */
     getNewOperationId() {
         this.counter++
         return new OpId(this.counter, this.id)
     }
 
+    /**
+     * Get the tail node ID of a node.
+     * Example:
+     * - A // node
+     *   - B
+     *     - C // tail tail 
+     * @param {OpId} id 
+     * @returns {OpId}
+     */
     #getTailId(id) {
         const node = this.crdtNodes[id]
         if (node.childIds.length == 0) {
@@ -170,6 +205,12 @@ export class TextCrdt {
         return this.#getTailId(node.childIds[node.childIds.length - 1])
     }
 
+    /**
+     * Get the last active tail node
+     * @param {OpId} id 
+     * @param {OpId} startAfterId 
+     * @returns 
+     */
     #getNonDeletedTailNode(id, startAfterId) {
         const node = this.crdtNodes[id]
 
@@ -180,7 +221,7 @@ export class TextCrdt {
             const childNode = this.crdtNodes[node.childIds[i]]
 
             if (startLookingInChildren) {
-                // Go down and look for a tail non deleted child node.
+                // Go down the tree and look for a tail non deleted child node.
                 // We do it recursively till we find the tail
                 nonDeletedChildNode = this.#getNonDeletedTailNode(node.childIds[i], null)
                 if (nonDeletedChildNode != null) {
@@ -197,7 +238,7 @@ export class TextCrdt {
             return node
         }
         else if (nonDeletedChildNode == null && node.parentId != null) {
-            // Go up because we haven't got a non-deleted tail node yet
+            // Go up the tree because we haven't got a non-deleted tail node yet
             return this.#getNonDeletedTailNode(node.parentId, node.id)
         }
         else {
