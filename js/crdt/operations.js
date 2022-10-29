@@ -1,5 +1,6 @@
 /**
- * Responsible for creating text nodes
+ * Responsible for creating text nodes. So when the user types something
+ * in a text editor - we use this operation
  */
 export class CreationOperation {
     #id
@@ -51,7 +52,7 @@ export class CreationOperation {
 
 /**
  * Responsible for deactivating of activating text nodes.
- * So when a user deletes text or undos a deletion - we use this operation type
+ * So when a user deletes text or undos a deletion - we use this operation
  */
 export class ActivationOperation {
     #id

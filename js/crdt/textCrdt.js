@@ -136,7 +136,7 @@ export class TextCrdt {
                     isActive: true,
                 }
 
-                targetLeftId = this.getNonDeletedLeftId(targetLeftId)
+                targetLeftId = this.getActiveLeftId(targetLeftId)
 
                 callback(op, targetLeftId)
 
@@ -168,7 +168,7 @@ export class TextCrdt {
 
                 const node = this.crdtNodes[op.getTargetId()]
                 if (!node.activatorId || (op.getId().isGreaterThan(node.activatorId))) {
-                    node.isActive = op.isSetToActivate
+                    node.isActive = op.isSetToActivate()
                     node.activatorId = op.getId()
                     callback(op)
                 } 
@@ -192,7 +192,7 @@ export class TextCrdt {
      * Example:
      * - A // node
      *   - B
-     *     - C // tail tail 
+     *     - C // tail 
      * @param {OpId} id 
      * @returns {OpId}
      */
@@ -206,52 +206,52 @@ export class TextCrdt {
     }
 
     /**
-     * Get the last active tail node
-     * @param {OpId} id 
-     * @param {OpId} startAfterId 
-     * @returns 
+     * Get the nearest active node 
+     * @param {OpId} id we start our search from this ID and go down and up the tree from it
+     * @param {OpId} startAfterId in case if we need to skip child nodes and start our search after a given child ID
+     * @returns {{}}
      */
-    #getNonDeletedTailNode(id, startAfterId) {
+    #getActiveTailNode(id, startAfterId) {
         const node = this.crdtNodes[id]
 
-        let nonDeletedChildNode = null
-        let startLookingInChildren = startAfterId ? false : true
+        let activeChildNode = null
+        let startLookingInChildNodes = startAfterId ? false : true
 
         for (let i = node.childIds.length - 1; i >= 0; i--) {
             const childNode = this.crdtNodes[node.childIds[i]]
 
-            if (startLookingInChildren) {
-                // Go down the tree and look for a tail non deleted child node.
+            if (startLookingInChildNodes) {
+                // Go down the tree and look for a tail active child node.
                 // We do it recursively till we find the tail
-                nonDeletedChildNode = this.#getNonDeletedTailNode(node.childIds[i], null)
-                if (nonDeletedChildNode != null) {
+                activeChildNode = this.#getActiveTailNode(node.childIds[i], null)
+                if (activeChildNode != null) {
                     break
                 }
             }
             else if (startAfterId && OpId.equals(childNode.id, startAfterId)) {
-                startLookingInChildren = true
+                startLookingInChildNodes = true
             }
         }
 
-        if (nonDeletedChildNode == null && node.isActive) {
-            // Return the tail that is not deleted
+        if (activeChildNode == null && node.isActive) {
+            // Return the tail that is active
             return node
         }
-        else if (nonDeletedChildNode == null && node.parentId != null) {
-            // Go up the tree because we haven't got a non-deleted tail node yet
-            return this.#getNonDeletedTailNode(node.parentId, node.id)
+        else if (activeChildNode == null && node.parentId != null) {
+            // Go up the tree because we haven't got a an active tail node yet
+            return this.#getActiveTailNode(node.parentId, node.id)
         }
         else {
-            // Return a non-deleted tail child node. That is the final step.
+            // Return an acgtive tail child node. That is the final step.
             // We ether have a node or null here
-            return nonDeletedChildNode
+            return activeChildNode
         }
     }
 
     /**
-     * Find a target non deleted left id. It goes left until it finds a non-deleted node
+     * Find a target active left id. It goes left until it finds the first active node
      */
-    getNonDeletedLeftId(id) {
+    getActiveLeftId(id) {
         if (!id) {
             return null
         }
@@ -265,7 +265,7 @@ export class TextCrdt {
             return null
         }
 
-        const nonDeletedTail = this.#getNonDeletedTailNode(node.parentId, id)
-        return nonDeletedTail ? nonDeletedTail.id : null
+        const activeTail = this.#getActiveTailNode(node.parentId, id)
+        return activeTail ? activeTail.id : null
     }
 }

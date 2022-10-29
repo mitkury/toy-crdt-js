@@ -98,9 +98,9 @@ export class Editor extends EventTarget {
 
                         // In that case we insert the new line before the anchor
                         if (selection.anchorOffset == 0 && anchorParentId) {
-                            // Try to get the non-deleted node on the left
+                            // Try to get the active node on the left
                             // If the element exists in the editor we assume
-                            // it's not deleted
+                            // it's active
                             let elementOnTheLeft = this.#domElements[anchorParentId].previousSibling
                             if (elementOnTheLeft != null) {
                                 anchorParentId = elementOnTheLeft.getAttribute('data-id')
@@ -403,7 +403,7 @@ export class Editor extends EventTarget {
         if (targetCaret.leftId) {
             const selection = window.getSelection()
 
-            const nodeOnTheLeftId = this.#textCrdt.getNonDeletedLeftId(targetCaret.leftId)
+            const nodeOnTheLeftId = this.#textCrdt.getActiveLeftId(targetCaret.leftId)
             if (nodeOnTheLeftId) {
                 const anchorNode = this.#domElements[nodeOnTheLeftId]
                 selection.setBaseAndExtent(anchorNode, 1, anchorNode, 1)
@@ -528,9 +528,9 @@ export class Editor extends EventTarget {
 
         // In that case we insert the new line before the anchor
         if (selection.anchorOffset == 0 && targetParentId) {
-            // Try to get the non-deleted node on the left
+            // Try to get the active node on the left
             // If the element exists in the editor we assume
-            // it's not deleted
+            // it's active
             let elementOnTheLeft = this.#domElements[targetParentId].previousSibling
             if (elementOnTheLeft != null) {
                 targetParentId = elementOnTheLeft.getAttribute('data-id')
@@ -594,7 +594,7 @@ export class Editor extends EventTarget {
         if (targetCaret.leftId) {
             const selection = window.getSelection()
 
-            const nodeOnTheLeftId = this.#textCrdt.getNonDeletedLeftId(targetCaret.leftId)
+            const nodeOnTheLeftId = this.#textCrdt.getActiveLeftId(targetCaret.leftId)
             if (nodeOnTheLeftId) {
                 const anchorNode = this.#domElements[nodeOnTheLeftId]
                 selection.setBaseAndExtent(anchorNode, 1, anchorNode, 1)
