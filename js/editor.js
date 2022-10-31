@@ -13,7 +13,7 @@ export class Editor extends EventTarget {
     #isOnline = false
     #textCrdt = null
     #opsDidByClient = []
-    #undoIndex = 0
+    #opsUndidByClient = []
 
     /**
      * @returns {OpId[]}
@@ -73,12 +73,16 @@ export class Editor extends EventTarget {
                 editorEl.addEventListener('paste', e => this.#editorPasteHandle(e))
                 editorEl.addEventListener('beforeinput', e => {
                     switch (e.inputType) {
-                        case "historyUndo": this.#handleUndo(e); break
-                        case "historyRedo": this.#handleRedo(e); break
+                        case "historyUndo": e.preventDefault(); this.undo(); break
+                        case "historyRedo": e.preventDefault(); this.redo(); break
                     }
                 })
                 editorEl.addEventListener('keydown', e => {
-                    if (e.key === 'Enter') {
+                    if (e.key == "F2") {
+                        this.redo()
+                        console.log(e)
+                    }
+                    else if (e.key === 'Enter') {
                         e.preventDefault()
                         // TODO: move to a separate function onNewLineCreations
 
@@ -403,7 +407,7 @@ export class Editor extends EventTarget {
         if (targetCaret.leftId) {
             const selection = window.getSelection()
 
-            const nodeOnTheLeftId = this.#textCrdt.getActiveLeftId(targetCaret.leftId)
+            const nodeOnTheLeftId = this.#textCrdt.getActiveId(targetCaret.leftId)
             if (nodeOnTheLeftId) {
                 const anchorNode = this.#domElements[nodeOnTheLeftId]
                 selection.setBaseAndExtent(anchorNode, 1, anchorNode, 1)
@@ -411,48 +415,70 @@ export class Editor extends EventTarget {
         }
     }
 
-    #handleUndo(e) {
-        e.preventDefault()
+    #getReverseOp(op) {
+        let reverseOp = null
 
+        if (op instanceof CreationOperation) {
+            reverseOp = new ActivationOperation(
+                this.#textCrdt.getNewOperationId(),
+                op.getId(),
+                false
+            )
+        } else if (op instanceof ActivationOperation) {
+            if (op.isSetToActivate()) {
+                reverseOp = new ActivationOperation(
+                    this.#textCrdt.getNewOperationId(),
+                    op.getTargetId(),
+                    false
+                )
+            } else {
+                reverseOp = new ActivationOperation(
+                    this.#textCrdt.getNewOperationId(),
+                    op.getTargetId(),
+                    true
+                )
+            }
+        }
+
+        return reverseOp
+    }
+
+    undo() {
         if (this.#opsDidByClient.length == 0) {
             return
         }
 
-        const opToUndo = this.#textCrdt.operations[this.#opsDidByClient[this.#undoIndex]]
-        this.#undoIndex--
-
-        let reverseOp = null
-
-        if (opToUndo instanceof CreationOperation) {
-            reverseOp = new ActivationOperation(
-                this.#textCrdt.getNewOperationId(),
-                opToUndo.id,
-                false
-            )
-        } else if (opToUndo instanceof ActivationOperation) {
-            // TODO: implement
-            if (opToUndo.isSetToActivate()) {
-
-            } else {
-
-            }
-
-            /*
-            const creationOp = this.#textCrdt.operations[opToUndo.targetId]
-            reverseOp = {
-                ...creationOp
-            }
-            
-            reverseop.getId() = this.#textCrdt.getNewOperationId()
-            */
-        }
-
+        const opToUndo = this.#textCrdt.operations[this.#opsDidByClient.pop()]
+        const reverseOp = this.#getReverseOp(opToUndo)
+        this.#opsUndidByClient.push(reverseOp.getId())
         this.executeOperations([reverseOp])
-        this.#addOpIdsToArrayOfOpsDidByClient([reverseOp], true)
     }
 
-    #handleRedo(e) {
-        e.preventDefault()
+    redo() {
+        if (this.#opsUndidByClient.length == 0) {
+            return
+        }
+
+        const opToRedo = this.#textCrdt.operations[this.#opsUndidByClient.pop()]
+        const reverseOp = this.#getReverseOp(opToRedo)
+        this.#opsDidByClient.push(reverseOp.getId())
+        this.executeOperations([reverseOp])
+    }
+
+    #insertNode(id, value, tagName, targetLeftId) {
+        const newEl = element(tagName, this.#editorEl)
+        newEl.setAttribute('data-id', id)
+        newEl.innerText = value
+
+        const leftEl = targetLeftId ? this.#domElements[targetLeftId] : null
+
+        if (leftEl && leftEl.nextSibling) {
+            this.#editorEl.insertBefore(newEl, leftEl.nextSibling)
+        } else {
+            this.#editorEl.prepend(newEl)
+        }
+
+        this.#domElements[id] = newEl
     }
 
     #executeOperationsUnsafe(ops) {
@@ -464,25 +490,7 @@ export class Editor extends EventTarget {
 
         this.#textCrdt.executeOperations(ops, (op, targetLeftId) => {
             if (op instanceof CreationOperation) {
-
-                const newEl = element(op.getTagName(), editorEl)
-                newEl.setAttribute('data-id', op.getId())
-
-                if (op.getValue()) {
-                    newEl.innerText = op.getValue()
-                }
-
-                const actualRoot = this.#editorEl
-                const leftEl = targetLeftId ? this.#domElements[targetLeftId] : null
-
-                if (leftEl && leftEl.nextSibling) {
-                    actualRoot.insertBefore(newEl, leftEl.nextSibling)
-                } else {
-                    actualRoot.prepend(newEl)
-                }
-
-                this.#domElements[op.getId()] = newEl
-
+                this.#insertNode(op.getId(), op.getValue(), op.getTagName(), targetLeftId)
             } else if (op instanceof ActivationOperation) {
 
                 if (!op.isSetToActivate()) {
@@ -492,22 +500,20 @@ export class Editor extends EventTarget {
                         delete this.#domElements[op.getTargetId()]
                     }
                 } else {
-                    // TODO: implement activation / re-creation
+                    const node = this.#textCrdt.getNode(op.getTargetId())
+                    this.#insertNode(node.id, node.text, node.tagName, targetLeftId)
                 }
 
             }
         })
     }
 
-    #addOpIdsToArrayOfOpsDidByClient(ops, dontResetIndex) {
+    #addOpIdsToArrayOfOpsDidByClient(ops) {
         // TODO: consider scoping those ops so it's possible to undo them in one go
-        const opIds = ops.map(o => o.id)
+        const opIds = ops.map(o => o.getId())
         this.#opsDidByClient.push(...opIds)
 
-        if (!dontResetIndex) {
-            // Reset the index
-            this.#undoIndex = this.#opsDidByClient.length - 1
-        }
+        this.#opsUndidByClient = []
     }
 
     #getTargetParentIdFromSelection() {
@@ -594,7 +600,7 @@ export class Editor extends EventTarget {
         if (targetCaret.leftId) {
             const selection = window.getSelection()
 
-            const nodeOnTheLeftId = this.#textCrdt.getActiveLeftId(targetCaret.leftId)
+            const nodeOnTheLeftId = this.#textCrdt.getActiveId(targetCaret.leftId)
             if (nodeOnTheLeftId) {
                 const anchorNode = this.#domElements[nodeOnTheLeftId]
                 selection.setBaseAndExtent(anchorNode, 1, anchorNode, 1)

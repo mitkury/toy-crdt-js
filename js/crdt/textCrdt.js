@@ -15,7 +15,7 @@ export class TextCrdt {
     /**
      * @param {OpId} id 
      */
-    constructor(id) { 
+    constructor(id) {
         this.id = id
 
         this.crdtNodes[OpId.root()] = {
@@ -36,7 +36,7 @@ export class TextCrdt {
     }
 
     /**
-     * @param {*} id 
+     * @param {OpId} id 
      * @returns 
      */
     getNode(id) {
@@ -49,6 +49,41 @@ export class TextCrdt {
      */
     hasOperation(id) {
         return this.operations[id] ? true : false
+    }
+
+    getActiveNodeIdOnTheLeftFrom(node) {
+        let targetLeftId = null
+        const parentNode = this.crdtNodes[node.parentId]
+        const childIds = parentNode.childIds
+
+        if (childIds.length > 0) {
+            targetLeftId = node.parentId
+
+            let nodeOnTheLeftIsChildOfParent = false
+            for (let i = 0; i < childIds.length; i++) {
+                const childId = childIds[i]
+                if (OpId.equals(node.id, childId)) {
+                    break
+                }
+
+                nodeOnTheLeftIsChildOfParent = true
+                targetLeftId = childId
+            }
+
+            if (nodeOnTheLeftIsChildOfParent) {
+                // Get the target left at the tail of the targetLeftId because the target
+                // may have its own children
+                targetLeftId = this.#getTailId(targetLeftId)
+            }
+        } else {
+            targetLeftId = node.parentId
+        }
+
+        if (OpId.equals(targetLeftId, OpId.root())) {
+            targetLeftId = null
+        }
+
+        return this.getActiveId(targetLeftId)
     }
 
     /**
@@ -79,7 +114,6 @@ export class TextCrdt {
             }
 
             if (op instanceof CreationOperation) {
-
                 // First make sure that needed nodes already exist. If not then 
                 // save the operation for later, when a node appears
                 if (!this.crdtNodes.hasOwnProperty(op.getParentId())) {
@@ -136,7 +170,7 @@ export class TextCrdt {
                     isActive: true,
                 }
 
-                targetLeftId = this.getActiveLeftId(targetLeftId)
+                targetLeftId = this.getActiveId(targetLeftId)
 
                 callback(op, targetLeftId)
 
@@ -167,11 +201,20 @@ export class TextCrdt {
                 }
 
                 const node = this.crdtNodes[op.getTargetId()]
+                // Actually execute only in case if the node didn't have the activator
+                // before or the new activator has a greater ID than the previous one.
+                // We ensure the eventual consistency that way with the activation 
+                // and deactivation of nodes.
                 if (!node.activatorId || (op.getId().isGreaterThan(node.activatorId))) {
                     node.isActive = op.isSetToActivate()
                     node.activatorId = op.getId()
-                    callback(op)
-                } 
+
+                    const targetLeftId = op.isSetToActivate() ? 
+                        this.getActiveNodeIdOnTheLeftFrom(this.crdtNodes[op.getTargetId()]) :
+                        null
+
+                    callback(op, targetLeftId)
+                }
             }
 
             this.operations[op.getId()] = op
@@ -249,9 +292,12 @@ export class TextCrdt {
     }
 
     /**
-     * Find a target active left id. It goes left until it finds the first active node
+     * Find a target active id. It goes left until it finds the first active node
+     * @param {OpId} id if the node of this ID is active, 
+     * the function returns the same ID, otherwise it goes left
+     * @returns {OpId} the first active node ID on the left from the target ID
      */
-    getActiveLeftId(id) {
+    getActiveId(id) {
         if (!id) {
             return null
         }
