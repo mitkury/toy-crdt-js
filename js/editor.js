@@ -14,6 +14,7 @@ export class Editor extends EventTarget {
     #textCrdt = null
     #opsDidByClient = []
     #opsUndidByClient = []
+    #ctrlIsPressed = false
 
     /**
      * @returns {OpId[]}
@@ -73,19 +74,44 @@ export class Editor extends EventTarget {
                 editorEl.addEventListener('paste', e => this.#editorPasteHandle(e))
                 editorEl.addEventListener('beforeinput', e => {
                     switch (e.inputType) {
+                        // This will trigger because we do mutations and 
+                        // the browser see a possibility to "undo" them
                         case "historyUndo": e.preventDefault(); this.undo(); break
+                        
+                        // But this won't do anything as far as I know because we
+                        // cancel "undo". So the browser won't see any possibility
+                        // to do a "redo". But I keep this just in case
                         case "historyRedo": e.preventDefault(); this.redo(); break
                     }
                 })
+                editorEl.addEventListener('dragstart', e => {
+                    // Haven't implemented an ability to correctly drag and drop, so let's
+                    // prevent it for now
+                    e.preventDefault()
+                })
                 editorEl.addEventListener('keydown', e => {
-                    if (e.key == "F2") {
-                        this.redo()
-                        console.log(e)
+                    if (e.key == 'Control') {
+                        this.#ctrlIsPressed = true
                     }
-                    else if (e.key === 'Enter') {
+
+                    if (this.#ctrlIsPressed) {
+                        // TODO: move to a separate function
+
+                        // b
+                        if (e.keyCode == 66) {
+                            e.preventDefault()
+                        }
+
+                        // y
+                        if (e.keyCode == 89) {
+                            e.preventDefault()
+                            this.redo()
+                        }
+                    }
+
+                    if (e.key === 'Enter') {
                         e.preventDefault()
                         // TODO: move to a separate function onNewLineCreations
-
                         const selection = window.getSelection()
                         const anchorNode = selection.anchorNode
                         let anchorParentId
@@ -144,6 +170,11 @@ export class Editor extends EventTarget {
                         // Put the caret inside the span element
                         const newAnchorNode = this.#domElements[newSpanId]
                         selection.setBaseAndExtent(newAnchorNode, 1, newAnchorNode, 1)
+                    }
+                })
+                editorEl.addEventListener('keyup', e => { 
+                    if (e.key == 'Control') {
+                        this.#ctrlIsPressed = false
                     }
                 })
             })
@@ -245,7 +276,7 @@ export class Editor extends EventTarget {
         for (var i = 0; i < mutations.length; i++) {
             let mutation = mutations[i]
             let target = mutation.target
-            // A mutation on a tree of nodes: addition and romoval of nodes
+            // A mutation on a tree of nodes: addition and removal of nodes
             if (mutation.type == 'childList') {
                 if (mutation.addedNodes.length > 0) {
                     for (var j = 0; j < mutation.addedNodes.length; j++) {
