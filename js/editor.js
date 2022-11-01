@@ -483,6 +483,13 @@ export class Editor extends EventTarget {
         const reverseOp = this.#getReverseOp(opToUndo)
         this.#opsUndidByClient.push(reverseOp.getId())
         this.executeOperations([reverseOp])
+
+        this.dispatchEvent(new CustomEvent('operationsExecuted', {
+            detail: {
+                editorId: this.#id,
+                operations: [reverseOp]
+            }
+        }))
     }
 
     redo() {
@@ -494,6 +501,13 @@ export class Editor extends EventTarget {
         const reverseOp = this.#getReverseOp(opToRedo)
         this.#opsDidByClient.push(reverseOp.getId())
         this.executeOperations([reverseOp])
+
+        this.dispatchEvent(new CustomEvent('operationsExecuted', {
+            detail: {
+                editorId: this.#id,
+                operations: [reverseOp]
+            }
+        }))
     }
 
     #insertNode(id, value, tagName, targetLeftId) {
