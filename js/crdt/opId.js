@@ -26,7 +26,7 @@ export class OpId {
     }
 
     static equals(opIdA, opIdB) {
-        if (opIdA == null && opIdB == null) {
+        if (opIdA == opIdB) {
             return true
         }
         else if (!opIdA || !opIdB) {

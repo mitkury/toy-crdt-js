@@ -155,9 +155,11 @@ export class TextCrdt {
                     targetLeftId = op.getParentId()
                 }
 
+                /*
                 if (OpId.equals(targetLeftId, OpId.root())) {
                     targetLeftId = null
                 }
+                */
 
                 parentNode.childIds.splice(indexOfInsertion, 0, op.getId())
 
