@@ -27,7 +27,10 @@
 
 
 
-        console.log(diff("ABC", "A1B"))
+        //console.log(diff("hello world", "hey beautiful world"))
+        //console.log(diff("helo", "hello"))
+        //console.log(diff("00", "10"))
+
 
         //console.log(diff("A1B", "AB"))
 
@@ -96,6 +99,7 @@
             const newLength = newStr.length
             const largestLength = newStr.length > oldStr.length ? newStr.length : oldStr.length
             const newIsLongerThanOld = newLength > oldLength
+            const newAndOldHaveEqualLength = !newIsLongerThanOld && newLength == oldLength
 
             let start = -1
             for (let i = 0; i < largestLength; i++) {
@@ -105,52 +109,70 @@
                 }
             }
 
-            // Added at the end
-            if (newIsLongerThanOld && start >= oldLength) {
-                console.log("Added at the end")
-                return [oldLength, newStr.substr(start, newLength - oldLength), 0]
-            }
-
-            // Removed at the end
-            if (!newIsLongerThanOld && start >= newLength) {
-                console.log("Removed at the end")
-                return [newLength, '', oldLength - newLength]
-            }
-
-            let end = -1
-            let oldIdx = oldLength - 1
-            let newIdx = newLength - 1
-            let i = largestLength - 1
-            while (i > 0) {
-                if (oldStr.charAt(oldIdx) !== newStr.charAt(newIdx)) {
-                    end = i
-                    break
+            if (!newAndOldHaveEqualLength) {
+                // Added at the end
+                if (newIsLongerThanOld && start >= oldLength) {
+                    console.log("Added at the end")
+                    return [oldLength, newStr.substr(start, newLength - oldLength), 0]
                 }
 
-                oldIdx--
-                newIdx--
-                i--
+                // Removed at the end
+                if (!newIsLongerThanOld && start >= newLength) {
+                    console.log("Removed at the end")
+                    return [newLength, '', oldLength - newLength]
+                }
+
+                let end = -1
+                let oldIdx = oldLength - 1
+                let newIdx = newLength - 1
+                let i = largestLength - 1
+                while (i > 0) {
+                    if (oldStr.charAt(oldIdx) !== newStr.charAt(newIdx)) {
+                        end = i
+                        break
+                    }
+
+                    oldIdx--
+                    newIdx--
+                    i--
+                }
+
+                // Added at the start
+                if (newIsLongerThanOld && end <= newLength - oldLength - 1) {
+                    console.log("Added at the start")
+                    return [0, newStr.substr(0, newLength - oldLength), 0]
+                }
+
+                // Removed at the start
+                if (!newIsLongerThanOld && end <= oldLength - newLength - 1) {
+                    console.log("Removed at the start")
+                    return [0, '', oldLength - newLength]
+                }
             }
 
-            // Added at the start
-            if (newIsLongerThanOld && end <= newLength - oldLength - 1) {
-                console.log("Added at the start")
-                return [0, newStr.substr(0, newLength - oldLength), 0]
+            let oldIdx = 0
+            let newIdx = 0
+            for (let idx = 0; idx < largestLength; idx++) {
+                if (oldStr.charAt(oldIdx) === newStr.charAt(newIdx)) {
+                    oldIdx++
+                    newIdx++
+                } else {
+
+                }
             }
 
-            // Removed at the start
-            if (!newIsLongerThanOld && end <= oldLength - newLength - 1) {
-                console.log("Removed at the start")
-                return [0, '', oldLength - newLength]
-            }
 
             // Removed, replaced or inserted
 
+            /*
             const newStrRange = newIdx - start
             const addedStr = newStr.substr(start, end)
             const replacementRange = end - start + 1
            
             return [start, addedStr, replacementRange]
+            */
+
+
 
             /*
             let start = -1

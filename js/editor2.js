@@ -2,6 +2,62 @@ import { element, div, span, nodeHasDataId } from "/js/utils.js"
 import { OpId } from "/js/crdt/opId.js"
 import { TextCrdt } from "/js/crdt/textCrdt.js"
 import { ActivationOperation, CreationOperation } from "/js/crdt/operations.js"
+import { diff, NOOP, REPLACE, DELETE, INSERT } from "/js/myersDiff.js"
+
+const d = diffProcess("hello world", "hey beautiful world")
+
+function diffProcess(source, target) {
+    const changes = diff(source, target);
+    let sourceIndex = 0;
+    let targetIndex = 0;
+
+    // TODO: 
+    // ingegrate into segment
+    // gather IDs from indices
+    // create new nodes and insert them before target nodes (found from indices)
+
+    // fun: how about optimizing this diff with my previous solution of finding
+    // only insertions and deletions at the start and end?
+
+    for (let i = 0, { length } = changes; i < length; i++) {
+        switch (changes[i]) {
+
+            // in both REPLACE and NOOP cases
+            // move forward with both indexes
+            case REPLACE:
+                console.log("Replace \'"+source[sourceIndex]+"\' with \'"+target[targetIndex]+"\'")
+                // in replace case, you can safely pass the value
+                //source[sourceIndex] = target[targetIndex];
+            // se no break here: the fallthrough in meant to increment
+            case NOOP:
+                sourceIndex++;
+                targetIndex++;
+                break;
+
+            case DELETE:
+                console.log("Delete \'"+source[sourceIndex]+"\'")
+                //source.splice(sourceIndex, 1);
+                // Note: in this case don't increment the sourceIndex
+                // as the length mutated via splice, however,
+                // you should increment sourceIndex++ if you are dealing
+                // with a parentNode, as example, and the source is a facade
+                // never touch the targetIndex during DELETE
+                break;
+
+            case INSERT:
+                console.log("Insert \'"+target[targetIndex]+"\'")
+                // Note: in this case, as the length is mutated again
+                // you need to move forward sourceIndex++ too
+                // but if you appending nodes, or inserting before other nodes,
+                // you should *not* move sourceIndex forward
+                //source.splice(sourceIndex++, 0, target[targetIndex]);
+
+                // the targetIndex instead should *always* be incremented on INSERT
+                targetIndex++;
+                break;
+        }
+    }
+}
 
 export class Editor extends EventTarget {
 
@@ -389,6 +445,9 @@ export class Editor extends EventTarget {
                     const newValue = mutation.target.data
                     const editorSegment = this.#editorSegments[segmentId]
                     editorSegment.segmentEl.innerText = oldValue
+
+                    const diff2 = diff(oldValue, newValue)
+
                     editorSegment.getDiff(oldValue, newValue, (addedText, startIndex, targetLeftId, nodeIdsToDelete) => {
                         if (nodeIdsToDelete.length > 0) {
                             for (let i = 0; i < nodeIdsToDelete.length; i++) {
@@ -897,7 +956,7 @@ class EditorSegment {
         const newStrRange = newIdx - start
         const addedStr = newStr.substr(start, end)
         const replacementRange = end - start + 1
-       
+
         return [start, addedStr, replacementRange]
 
 
