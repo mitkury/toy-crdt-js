@@ -389,7 +389,7 @@ export class Editor extends EventTarget {
                     const oldValue = mutation.oldValue
                     const newValue = mutation.target.data
                     const editorSegment = this.#editorSegments[segmentId]
-                    editorSegment.segmentEl.innerText = oldValue
+                    editorSegment.segmentEl.textContent = oldValue
 
                     const { insertions, deletions } = editorSegment.processMutation(oldValue, newValue)
 
@@ -577,22 +577,6 @@ export class Editor extends EventTarget {
                 operations: [reverseOp]
             }
         }))
-    }
-
-    #insertNode(id, value, tagName, targetLeftId) {
-        const newEl = element(tagName, this.#editorEl)
-        newEl.setAttribute('data-id', id)
-        newEl.innerText = value
-
-        const leftEl = targetLeftId ? this.#domElements[targetLeftId] : null
-
-        if (leftEl && leftEl.nextSibling) {
-            this.#editorEl.insertBefore(newEl, leftEl.nextSibling)
-        } else {
-            this.#editorEl.prepend(newEl)
-        }
-
-        this.#domElements[id] = newEl
     }
 
     #executeOperationsUnsafe(ops) {

@@ -171,17 +171,16 @@ export class EditorSegment {
         contentIndex++
 
         this.nodeIds.splice(nodeIndex, 0, nodeId)
-
-        // Note: consider to make it work though mutating rather than 
-        // re-building.
-        /*
-        const str = this.segmentEl.innerText
+  
+        const str = this.segmentEl.textContent
         this.segmentEl.textContent =
             str.slice(0, contentIndex) +
             node.text +
             str.slice(contentIndex);
-        */
-
+   
+        // Note: this approach can be used instead to re-build the content
+        // from scratch in a segment
+        /*
         let str = ''
         for (let i = 0; i < this.nodeIds.length; i++) {
             let node = this.editor.textCrdt.crdtNodes[this.nodeIds[i]]
@@ -189,6 +188,7 @@ export class EditorSegment {
         }
 
         this.segmentEl.textContent = str
+        */
     }
 
     removeNode(nodeId) {
@@ -198,9 +198,9 @@ export class EditorSegment {
 
         this.nodeIds.splice(nodeIndex, 1)
 
-        const segmentText = this.segmentEl.innerText
+        const segmentText = this.segmentEl.textContent
         const newSegmentText = segmentText.substring(0, sliceStart) + segmentText.substring(sliceEnd)
-        this.segmentEl.innerText = newSegmentText
+        this.segmentEl.textContent = newSegmentText
     }
 
     getNodeIndexAndContentIndex(nodeId) {
