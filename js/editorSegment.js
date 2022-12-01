@@ -84,24 +84,48 @@ export class EditorSegment {
 
                     const nodeId = this.getNodeId(sourceIndex + 1)
                     deletions.push(nodeId)
+
+                    /*
                     insertions.push({
                         leftId: nodeId,
                         value: newValue[targetIndex]
                     })
-                   
+                    */
+                    {
+                        let sourceInsertionIndex = targetIndex - 1
+                        if (sourceInsertionIndex > oldValue.length - 1) {
+                            sourceInsertionIndex = oldValue.length - 1
+                        }    
+
+                        let insertion
+                        if (i == lastInsertionIdx + 1) {
+                            insertion = insertions[insertions.length - 1]
+                        } else {
+                            insertion = {
+                                leftId: this.getNodeId(sourceInsertionIndex + 1),
+                                value: ""
+                            }
+                            insertions.push(insertion)
+                        }
+                        insertion.value += newValue[targetIndex]
+                    }
+
+                    lastInsertionIdx = i
+
                     sourceIndex++;
                     targetIndex++;
                     break;
-                    
+
                 case NOOP:
                     sourceIndex++;
                     targetIndex++;
                     break;
-    
+
                 case DELETE:
                     deletions.push(this.getNodeId(sourceIndex + 1))
+                    sourceIndex++
                     break;
-    
+
                 case INSERT:
                     let sourceInsertionIndex = targetIndex - 1
                     if (sourceInsertionIndex > oldValue.length - 1) {
@@ -122,10 +146,16 @@ export class EditorSegment {
                     insertion.value += newValue[targetIndex]
                     lastInsertionIdx = i
 
+                    // Note: Do I need to increase sourceIndex as well
+                    // when I insert within the source (not just appending)
                     targetIndex++;
                     break;
             }
         }
+
+        console.log("Insertions and deletions:")
+        console.log(insertions)
+        console.log(deletions)
 
         return {
             insertions: insertions,
@@ -142,11 +172,23 @@ export class EditorSegment {
 
         this.nodeIds.splice(nodeIndex, 0, nodeId)
 
+        // Note: consider to make it work though mutating rather than 
+        // re-building.
+        /*
         const str = this.segmentEl.innerText
-        this.segmentEl.innerText =
+        this.segmentEl.textContent =
             str.slice(0, contentIndex) +
             node.text +
             str.slice(contentIndex);
+        */
+
+        let str = ''
+        for (let i = 0; i < this.nodeIds.length; i++) {
+            let node = this.editor.textCrdt.crdtNodes[this.nodeIds[i]]
+            str += node.text
+        }
+
+        this.segmentEl.textContent = str
     }
 
     removeNode(nodeId) {

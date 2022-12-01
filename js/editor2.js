@@ -106,7 +106,7 @@ export class Editor extends EventTarget {
                             e.preventDefault()
                         }
 
-                        // y
+                        // y // TODO: make it work on MacOS as expected
                         if (e.keyCode == 89) {
                             e.preventDefault()
                             this.redo()
@@ -392,24 +392,6 @@ export class Editor extends EventTarget {
                     editorSegment.segmentEl.innerText = oldValue
 
                     const { insertions, deletions } = editorSegment.processMutation(oldValue, newValue)
-           
-                    for (let i = 0; i < insertions.length; i++) {
-                        let char = insertions[i].value
-                        
-                        const newOpId = this.textCrdt.getNewOperationId()
-                        const op = new CreationOperation(
-                            newOpId,
-                            insertions[i].leftId, //prevOpId,
-                            char,
-                        )
-                        //prevOpId = newOpId
-
-                        this.#caret = {
-                            leftId: newOpId
-                        }
-
-                        ops.push(op)
-                    }
 
                     for (let i = 0; i < deletions.length; i++) {
                         const nodeId = deletions[i]
@@ -423,7 +405,29 @@ export class Editor extends EventTarget {
                             leftId: this.textCrdt.crdtNodes[nodeId].parentId
                         }
                     }
-                    
+
+                    for (let i = 0; i < insertions.length; i++) {
+                        const value = insertions[i].value
+                        let prevOpId = insertions[i].leftId
+
+                        for (let charIdx = 0; charIdx < value.length; charIdx++) {
+                            let char = value[charIdx]
+                        
+                            const newOpId = this.textCrdt.getNewOperationId()
+                            const op = new CreationOperation(
+                                newOpId,
+                                prevOpId,
+                                char,
+                            )
+                            prevOpId = newOpId
+    
+                            this.#caret = {
+                                leftId: newOpId
+                            }
+    
+                            ops.push(op)
+                        }
+                    }
 
                     /*
                     editorSegment.getDiff(oldValue, newValue, (addedText, startIndex, targetLeftId, nodeIdsToDelete) => {
