@@ -16,8 +16,7 @@ export class Editor extends EventTarget {
     #opsDidByClient = []
     #opsUndidByClient = []
     #ctrlIsPressed = false
-    #editorSegments = {}
-    #segmentCounter = 0
+    #editorSegment = null
 
     /**
      * @returns {OpId[]}
@@ -229,8 +228,7 @@ export class Editor extends EventTarget {
             }
 
             // TODO: find the segment correctly
-            const segment = this.#editorSegments[0]
-
+            const segment = this.#editorSegment
             if (segment) {
                 const nodeId = segment.getNodeId(selection.anchorOffset)
 
@@ -370,8 +368,7 @@ export class Editor extends EventTarget {
 
                         const segmentId = node.getAttribute('data-sid')
                         if (segmentId) {
-                            const segment = this.#editorSegments[0]
-
+                            const segment = this.#editorSegment
                             for (let i = 0; i < segment.nodeIds.length; i++) {
                                 const targetId = segment.nodeIds[i]
                                 ops.push(new ActivationOperation(
@@ -382,7 +379,7 @@ export class Editor extends EventTarget {
                             }
 
                             // TODO: change how a
-                            this.#editorSegments = {}
+                            this.#editorSegment = null
                         }
                     }
                 }
@@ -398,7 +395,7 @@ export class Editor extends EventTarget {
                 if (segmentId) {
                     const oldValue = mutation.oldValue
                     const newValue = mutation.target.data
-                    const editorSegment = this.#editorSegments[segmentId]
+                    const editorSegment = this.#editorSegment
                     editorSegment.segmentEl.textContent = oldValue
 
                     const { insertions, deletions } = editorSegment.processMutation(oldValue, newValue)
@@ -481,12 +478,10 @@ export class Editor extends EventTarget {
                     */
                 } else {
                     const targetData = mutation.target.data
-
-                    // TODO: get previous segment is it exists
-                    const leftSegment = this.#editorSegments[0]
+                    const segment = this.#editorSegment
                     let nodeLeftId = null
                     // Here we get targetLeftId from the last node of the previous segment
-                    if (leftSegment) {
+                    if (segment) {
                         nodeLeftId = OpId.root()
                     } else {
                         nodeLeftId = OpId.root()
@@ -597,23 +592,13 @@ export class Editor extends EventTarget {
         }
 
         this.textCrdt.executeOperations(ops, (op, targetLeftId) => {
-            let segment = this.#editorSegments[0]
+            let segment = this.#editorSegment
             if (!segment) {
-                const targetSegmentId = this.#segmentCounter
-
-                // TODO: fix how segments are getting created and added
-                //this.#segmentCounter++
-
+                const targetSegmentId = 0
                 const segmentEl = span(this.#editorEl)
                 segment = new EditorSegment(segmentEl, this)
                 segmentEl.setAttribute('data-sid', targetSegmentId)
-                /*
-                targetCaret.leftId = editorSegment.nodeIds[0]
-                targetCaret.segmentId = targetSegmentId
-                targetCaret.posInSegment = 1
-                */
-               
-                this.#editorSegments[targetSegmentId] = segment
+                this.#editorSegment = segment
             }
 
             if (op instanceof CreationOperation) {
@@ -686,7 +671,7 @@ export class Editor extends EventTarget {
             return null
         }
 
-        return this.#editorSegments[0].getNodeId(range.startOffset)
+        return this.#editorSegment.getNodeId(range.startOffset)
     }   
 
     #getSelectedNodeIds() {
@@ -709,7 +694,7 @@ export class Editor extends EventTarget {
         const startContent = range.startOffset
         const endContent = range.endOffset
 
-        return this.#editorSegments[0].getNodeIdsFromRange(startContent, endContent)
+        return this.#editorSegment.getNodeIdsFromRange(startContent, endContent)
     }
 
     #editorPasteHandle(e) {
@@ -777,8 +762,7 @@ export class Editor extends EventTarget {
     #updateCaretPos() {
         const targetCaret = this.#caret
         if (targetCaret != null && targetCaret.leftId) {
-            const segment = this.#editorSegments[0]
-
+            const segment = this.#editorSegment
             if (!segment) {
                 return
             }
