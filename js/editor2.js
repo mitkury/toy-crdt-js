@@ -343,6 +343,9 @@ export class Editor extends EventTarget {
                         // Text
                         else if (node.nodeType === 3) {
                             if (node.parentNode.childNodes.length == 1) {
+
+                                // TODO: create a new segment
+
                                 /*
                                 const opIdNewSpan = this.#textCrdt.getNewOperationId()
                                 ops.push(new CreationOperation(
@@ -364,18 +367,23 @@ export class Editor extends EventTarget {
                 if (mutation.removedNodes.length > 0) {
                     for (var j = 0; j < mutation.removedNodes.length; j++) {
                         const node = mutation.removedNodes[j]
-                        /*
-                        const targetId = OpId.tryParseStr(node.getAttribute('data-id'))
-                        if (targetId) {
-                            ops.push(new ActivationOperation(
-                                this.#textCrdt.getNewOperationId(),
-                                targetId,
-                                false
-                            ))
-                        } else {
 
+                        const segmentId = node.getAttribute('data-sid')
+                        if (segmentId) {
+                            const segment = this.#editorSegments[0]
+
+                            for (let i = 0; i < segment.nodeIds.length; i++) {
+                                const targetId = segment.nodeIds[i]
+                                ops.push(new ActivationOperation(
+                                    this.textCrdt.getNewOperationId(),
+                                    targetId,
+                                    false
+                                ))
+                            }
+
+                            // TODO: change how a
+                            this.#editorSegments = {}
                         }
-                        */
                     }
                 }
 
@@ -384,6 +392,8 @@ export class Editor extends EventTarget {
             else if (mutation.type == 'characterData' && mutation.target.parentNode) {
                 const parentEl = mutation.target.parentNode
                 const segmentId = parentEl.getAttribute('data-sid')
+
+                // TODO: create segment here?
 
                 if (segmentId) {
                     const oldValue = mutation.oldValue
@@ -412,7 +422,7 @@ export class Editor extends EventTarget {
 
                         for (let charIdx = 0; charIdx < value.length; charIdx++) {
                             let char = value[charIdx]
-                        
+
                             const newOpId = this.textCrdt.getNewOperationId()
                             const op = new CreationOperation(
                                 newOpId,
@@ -420,11 +430,11 @@ export class Editor extends EventTarget {
                                 char,
                             )
                             prevOpId = newOpId
-    
+
                             this.#caret = {
                                 leftId: newOpId
                             }
-    
+
                             ops.push(op)
                         }
                     }
@@ -590,7 +600,10 @@ export class Editor extends EventTarget {
             let segment = this.#editorSegments[0]
             if (!segment) {
                 const targetSegmentId = this.#segmentCounter
-                this.#segmentCounter++
+
+                // TODO: fix how segments are getting created and added
+                //this.#segmentCounter++
+
                 const segmentEl = span(this.#editorEl)
                 segment = new EditorSegment(segmentEl, this)
                 segmentEl.setAttribute('data-sid', targetSegmentId)
@@ -599,6 +612,7 @@ export class Editor extends EventTarget {
                 targetCaret.segmentId = targetSegmentId
                 targetCaret.posInSegment = 1
                 */
+               
                 this.#editorSegments[targetSegmentId] = segment
             }
 
@@ -655,32 +669,77 @@ export class Editor extends EventTarget {
         return targetParentId
     }
 
-    #getSelectedNodes() {
-        const selection = window.getSelection()
-        // TODO: support multiple ranges
-        return selection.getRangeAt(0).cloneContents().querySelectorAll("[data-id]")
+    #getFirstSelectedNodeId() {
+        // Get the selected text from the window
+        var selection = window.getSelection();
+
+        // If no text is selected, return null
+        if (selection.rangeCount === 0) {
+            return null
+        }
+
+        // Get the first range (there should only be one)
+        var range = selection.getRangeAt(0)
+
+        // If the selected range doesn't contain a text node, return null
+        if (!range.startContainer.nodeType === Node.TEXT_NODE) {
+            return null
+        }
+
+        return this.#editorSegments[0].getNodeId(range.startOffset)
+    }   
+
+    #getSelectedNodeIds() {
+        // Get the selected text from the window
+        var selection = window.getSelection();
+
+        // If no text is selected, return null
+        if (selection.rangeCount === 0) {
+            return null;
+        }
+
+        // Get the first range (there should only be one)
+        var range = selection.getRangeAt(0);
+
+        // If the selected range doesn't contain a text node, return null
+        if (!range.startContainer.nodeType === Node.TEXT_NODE) {
+            return null;
+        }
+
+        const startContent = range.startOffset
+        const endContent = range.endOffset
+
+        return this.#editorSegments[0].getNodeIdsFromRange(startContent, endContent)
     }
 
     #editorPasteHandle(e) {
         e.preventDefault()
 
+        /*
         let targetParentId = this.#getTargetParentIdFromSelection()
-
         if (targetParentId == null) {
             return
         }
+        */
 
         const ops = []
 
-        // First detect and delete selected nodes
-        const selectedNodes = this.#getSelectedNodes()
+        const selectedNodes = this.#getSelectedNodeIds()
         for (let i = 0; i < selectedNodes.length; i++) {
-            const targetId = selectedNodes[i].getAttribute('data-id')
+            const targetId = selectedNodes[i]
             ops.push(new ActivationOperation(
                 this.textCrdt.getNewOperationId(),
                 targetId,
                 false
             ))
+        }
+
+        let targetParentId = OpId.root()
+
+        if (selectedNodes.length > 0) {
+            targetParentId = selectedNodes[0]
+        } else {
+            targetParentId = this.#getFirstSelectedNodeId()
         }
 
         const pastedStr = e.clipboardData.getData('text/plain')
@@ -719,6 +778,11 @@ export class Editor extends EventTarget {
         const targetCaret = this.#caret
         if (targetCaret != null && targetCaret.leftId) {
             const segment = this.#editorSegments[0]
+
+            if (!segment) {
+                return
+            }
+
             let [_, contentIndex] = segment.getNodeIndexAndContentIndex(targetCaret.leftId)
             const textEl = segment.segmentEl.childNodes[0]
             const range = document.createRange();

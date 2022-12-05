@@ -95,7 +95,7 @@ export class EditorSegment {
                         let sourceInsertionIndex = targetIndex - 1
                         if (sourceInsertionIndex > oldValue.length - 1) {
                             sourceInsertionIndex = oldValue.length - 1
-                        }    
+                        }
 
                         let insertion
                         if (i == lastInsertionIdx + 1) {
@@ -171,13 +171,13 @@ export class EditorSegment {
         contentIndex++
 
         this.nodeIds.splice(nodeIndex, 0, nodeId)
-  
+
         const str = this.segmentEl.textContent
         this.segmentEl.textContent =
             str.slice(0, contentIndex) +
             node.text +
             str.slice(contentIndex);
-   
+
         // Note: this approach can be used instead to re-build the content
         // from scratch in a segment
         /*
@@ -216,6 +216,28 @@ export class EditorSegment {
         }
 
         return [-1, -1]
+    }
+
+    getNodeIdsFromRange(startContentIdx, endContentIdx) {
+        const crdtNodes = this.editor.textCrdt.crdtNodes;
+        const nodeIdsInRange = [];
+        let currentContentIdx = 0;
+
+        for (let i = 0; i < this.nodeIds.length; i++) {
+            const node = crdtNodes[this.nodeIds[i]];
+            const nodeValue = node.text;
+
+            for (let j = 0; j < nodeValue.length; j++) {
+                // Check if the current character is within the specified range
+                if (currentContentIdx >= startContentIdx && currentContentIdx < endContentIdx) {
+                    nodeIdsInRange.push(node.id);
+                }
+
+                currentContentIdx++;
+            }
+        }
+
+        return nodeIdsInRange;
     }
 
     getNodeId(contentIndex) {
