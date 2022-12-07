@@ -115,23 +115,10 @@ export class Editor extends EventTarget {
                     if (e.key === 'Enter') {
                         e.preventDefault()
 
-                        return
+                        // TODO: move to a separate function onNewLineCreations                        
+                        const anchorParentId = this.#getFirstSelectedNodeId()
 
-                        // TODO: move to a separate function onNewLineCreations
-                        const selection = window.getSelection()
-                        const anchorNode = selection.anchorNode
-                        let anchorParentId
-
-                        // Text node (inside a node with 'data-id')
-                        if (anchorNode.nodeType === 3) {
-                            anchorParentId = OpId.tryParseStr(anchorNode.parentNode.getAttribute('data-id'))
-
-                        }
-                        // Node with 'data-id' 
-                        else {
-                            anchorParentId = OpId.tryParseStr(anchorNode.getAttribute('data-id'))
-                        }
-
+                        /*
                         // In that case we insert the new line before the anchor
                         if (selection.anchorOffset == 0 && anchorParentId) {
                             // Try to get the active node on the left
@@ -144,6 +131,7 @@ export class Editor extends EventTarget {
                                 anchorParentId = OpId.root()
                             }
                         }
+                        */
 
                         const newBrId = this.textCrdt.getNewOperationId()
                         const newSpanId = this.textCrdt.getNewOperationId()
@@ -173,9 +161,11 @@ export class Editor extends EventTarget {
                             }
                         }))
 
+                        /*
                         // Put the caret inside the span element
                         const newAnchorNode = this.#domElements[newSpanId]
                         selection.setBaseAndExtent(newAnchorNode, 1, newAnchorNode, 1)
+                        */
                     }
                 })
                 editorEl.addEventListener('keyup', e => {
@@ -378,7 +368,6 @@ export class Editor extends EventTarget {
                                 ))
                             }
 
-                            // TODO: change how a
                             this.#editorSegment = null
                         }
                     }
@@ -389,8 +378,6 @@ export class Editor extends EventTarget {
             else if (mutation.type == 'characterData' && mutation.target.parentNode) {
                 const parentEl = mutation.target.parentNode
                 const segmentId = parentEl.getAttribute('data-sid')
-
-                // TODO: create segment here?
 
                 if (segmentId) {
                     const oldValue = mutation.oldValue
