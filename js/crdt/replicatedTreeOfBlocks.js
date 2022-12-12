@@ -2,13 +2,39 @@ import { ActivationOperation, CreationOperation } from "/js/crdt/operations.js"
 import { OpId } from "/js/crdt/opId.js"
 
 /**
- * This is our text CRDT based on RGA approach
+ * This class represents an ordered collection of blocks.
+ * We use this to modify the state in a way that allows us to merge changes 
+ * from multiple users.
+ * This can be used for collaborative text editing as well as 
+ * any other editing that uses arrays with data.
+ * It's based on the CRDT algorithm called RGA (Replicated Growable Array).
+ * CRDT (Conflict-free Replicated Data Types) is a way to merge changes consistenly
+ * among multiple peers where the peers don't have to manually solve conflicts.
+ * 
+ * The class maintains a set of blocks (nodes) that have been created, 
+ * as well as a set of operations that have been executed. 
+ * It provides methods for adding, modifying, and removing blocks, 
+ * as well as for querying the state of the array. Operations are responsible
+ * for creating and modifying blocks.
  */
-export class TextCrdt {
+// TODO: probably ReplicatedTreeOfBlocks is a better name?
+// Simply: it's a tree of blocks that can be replicated among multiple peers
+// without conflicts. The brances in that tree are ordered. 
+// If we flatten the tree - we will have a consisten order of blocks. 
+// Each block may contain a value, such as String. 
+// This class can be used to implemented a collaborative text editing
+export class ReplicatedTreeOfBlocks {
+
     id = null
     counter = 0
-    crdtNodes = {}
+    // Here are all the blocks that were ever created.
+    // The synonym for 'block' is 'node'. But we call it a block because
+    // we use the term 'node' for the DOM nodes.
+    blocks = {}
+    // Here are all the operations that were ever executed.
+    // Operations are responsible for creating and modifying blocks.
     operations = {}
+
     #opsWithMissingParentId = {}
     #delOpsWithMissingTargetId = {}
 
@@ -18,12 +44,12 @@ export class TextCrdt {
     constructor(id) {
         this.id = id
 
-        this.crdtNodes[OpId.root()] = {
+        this.blocks[OpId.root()] = {
             id: OpId.root(),
             parentId: null,
             childIds: [],
-            tagName: 'div',
             text: null,
+            type: 999,
             isActive: true,
         }
     }
@@ -39,8 +65,8 @@ export class TextCrdt {
      * @param {OpId} id 
      * @returns 
      */
-    getNode(id) {
-        return this.crdtNodes[id]
+    getBlock(id) {
+        return this.blocks[id]
     }
 
     /**
@@ -51,32 +77,41 @@ export class TextCrdt {
         return this.operations[id] ? true : false
     }
 
-    getActiveNodeIdOnTheLeftFrom(node) {
+    /**
+     * Returns an active block ID to the left of the given block in the parent block.
+     * In most cases the active block on the left will be its parent.
+     * But it also can be another child of the parent that has a smaller OpId.
+     * This is an important function that solves the convergence problem
+     * in collaboative editing.
+     * @param {*} block 
+     * @returns 
+     */
+    getActiveBlockIdOnTheLeftFrom(block) {
         let targetLeftId = null
-        const parentNode = this.crdtNodes[node.parentId]
-        const childIds = parentNode.childIds
+        const parentBlock = this.blocks[block.parentId]
+        const childIds = parentBlock.childIds
 
         if (childIds.length > 0) {
-            targetLeftId = node.parentId
+            targetLeftId = block.parentId
 
-            let nodeOnTheLeftIsChildOfParent = false
+            let blockOnTheLeftIsChildOfParent = false
             for (let i = 0; i < childIds.length; i++) {
                 const childId = childIds[i]
-                if (OpId.equals(node.id, childId)) {
+                if (OpId.equals(block.id, childId)) {
                     break
                 }
 
-                nodeOnTheLeftIsChildOfParent = true
+                blockOnTheLeftIsChildOfParent = true
                 targetLeftId = childId
             }
 
-            if (nodeOnTheLeftIsChildOfParent) {
+            if (blockOnTheLeftIsChildOfParent) {
                 // Get the target left at the tail of the targetLeftId because the target
                 // may have its own children
                 targetLeftId = this.#getTailId(targetLeftId)
             }
         } else {
-            targetLeftId = node.parentId
+            targetLeftId = block.parentId
         }
 
         if (OpId.equals(targetLeftId, OpId.root())) {
@@ -105,18 +140,18 @@ export class TextCrdt {
 
             // Increase the local counter if the op's counter is larger.
             // We do it because we use the counter as a 'Lamport timestamp'
-            // to insert nodes in a desirable order.
-            // So newer nodes can be inserted in front of old nodes, eg.
-            // any time we insert something in between of nodes
+            // to insert blocks in a desirable order.
+            // So newer blocks can be inserted in front of old blocks, eg.
+            // any time we insert something in between of blocks
             const newOpCounter = op.getId().getCounter()
             if (newOpCounter > this.counter) {
                 this.counter = newOpCounter
             }
 
             if (op instanceof CreationOperation) {
-                // First make sure that needed nodes already exist. If not then 
-                // save the operation for later, when a node appears
-                if (!this.crdtNodes.hasOwnProperty(op.getParentId())) {
+                // First make sure that needed blocks already exist. If not then 
+                // save the operation for later, when a block appears
+                if (!this.blocks.hasOwnProperty(op.getParentId())) {
                     let arr = []
                     if (this.#opsWithMissingParentId.hasOwnProperty(op.getParentId())) {
                         arr = this.#opsWithMissingParentId[op.getParentId()]
@@ -128,8 +163,8 @@ export class TextCrdt {
 
                 let targetLeftId = null
                 let indexOfInsertion = 0
-                const parentNode = this.crdtNodes[op.getParentId()]
-                const childIds = parentNode.childIds
+                const parentBlock = this.blocks[op.getParentId()]
+                const childIds = parentBlock.childIds
 
                 if (childIds.length > 0) {
                     targetLeftId = op.getParentId()
@@ -161,14 +196,14 @@ export class TextCrdt {
                 }
                 */
 
-                parentNode.childIds.splice(indexOfInsertion, 0, op.getId())
+                parentBlock.childIds.splice(indexOfInsertion, 0, op.getId())
 
-                this.crdtNodes[op.getId()] = {
+                this.blocks[op.getId()] = {
                     id: op.getId(),
                     parentId: op.getParentId(),
                     childIds: [],
-                    tagName: op.getTagName(),
                     text: String(op.getValue()),
+                    type: op.getType(),
                     isActive: true,
                 }
 
@@ -190,7 +225,7 @@ export class TextCrdt {
                     }
                 }
             } else if (op instanceof ActivationOperation) {
-                if (!this.crdtNodes.hasOwnProperty(op.getTargetId())) {
+                if (!this.blocks.hasOwnProperty(op.getTargetId())) {
                     let arr = []
                     if (this.#delOpsWithMissingTargetId.hasOwnProperty(op.getTargetId())) {
                         arr = this.#delOpsWithMissingTargetId[op.getTargetId()]
@@ -202,17 +237,17 @@ export class TextCrdt {
                     continue
                 }
 
-                const node = this.crdtNodes[op.getTargetId()]
-                // Actually execute only in case if the node didn't have the activator
+                const block = this.blocks[op.getTargetId()]
+                // Actually execute only in case if the block didn't have the activator
                 // before or the new activator has a greater ID than the previous one.
                 // We ensure the eventual consistency that way with the activation 
-                // and deactivation of nodes.
-                if (!node.activatorId || (op.getId().isGreaterThan(node.activatorId))) {
-                    node.isActive = op.isSetToActivate()
-                    node.activatorId = op.getId()
+                // and deactivation of blocks.
+                if (!block.activatorId || (op.getId().isGreaterThan(block.activatorId))) {
+                    block.isActive = op.isSetToActivate()
+                    block.activatorId = op.getId()
 
-                    const targetLeftId = op.isSetToActivate() ? 
-                        this.getActiveNodeIdOnTheLeftFrom(this.crdtNodes[op.getTargetId()]) :
+                    const targetLeftId = op.isSetToActivate() ?
+                        this.getActiveBlockIdOnTheLeftFrom(this.blocks[op.getTargetId()]) :
                         null
 
                     callback(op, targetLeftId)
@@ -233,87 +268,87 @@ export class TextCrdt {
     }
 
     /**
-     * Get the tail node ID of a node.
-     * Example:
-     * - A // node
-     *   - B
-     *     - C // tail 
-     * @param {OpId} id 
-     * @returns {OpId}
-     */
-    #getTailId(id) {
-        const node = this.crdtNodes[id]
-        if (node.childIds.length == 0) {
-            return id
-        }
-
-        return this.#getTailId(node.childIds[node.childIds.length - 1])
-    }
-
-    /**
-     * Get the nearest active node 
-     * @param {OpId} id we start our search from this ID and go down and up the tree from it
-     * @param {OpId} startAfterId in case if we need to skip child nodes and start our search after a given child ID
-     * @returns {{}}
-     */
-    #getActiveTailNode(id, startAfterId) {
-        const node = this.crdtNodes[id]
-
-        let activeChildNode = null
-        let startLookingInChildNodes = startAfterId ? false : true
-
-        for (let i = node.childIds.length - 1; i >= 0; i--) {
-            const childNode = this.crdtNodes[node.childIds[i]]
-
-            if (startLookingInChildNodes) {
-                // Go down the tree and look for a tail active child node.
-                // We do it recursively till we find the tail
-                activeChildNode = this.#getActiveTailNode(node.childIds[i], null)
-                if (activeChildNode != null) {
-                    break
-                }
-            }
-            else if (startAfterId && OpId.equals(childNode.id, startAfterId)) {
-                startLookingInChildNodes = true
-            }
-        }
-
-        if (activeChildNode == null && node.isActive) {
-            // Return the tail that is active
-            return node
-        }
-        else if (activeChildNode == null && node.parentId != null) {
-            // Go up the tree because we haven't got a an active tail node yet
-            return this.#getActiveTailNode(node.parentId, node.id)
-        }
-        else {
-            // Return an acgtive tail child node. That is the final step.
-            // We ether have a node or null here
-            return activeChildNode
-        }
-    }
-
-    /**
-     * Find a target active id. It goes left until it finds the first active node
-     * @param {OpId} id if the node of this ID is active, 
+     * Find a target active id. It goes left until it finds the first active block
+     * @param {OpId} id if the block of this ID is active, 
      * the function returns the same ID, otherwise it goes left
-     * @returns {OpId} the first active node ID on the left from the target ID
+     * @returns {OpId} the first active block ID on the left from the target ID
      */
     getActiveId(id) {
         if (!id) {
             return null
         }
 
-        const node = this.crdtNodes[id]
-        if (node.isActive) {
+        const block = this.blocks[id]
+        if (block.isActive) {
             return id
         }
 
-        if (!node.parentId) {
+        if (!block.parentId) {
             return null
         }
 
-        const activeTail = this.#getActiveTailNode(node.parentId, id)
+        const activeTail = this.#getActiveTailBlock(block.parentId, id)
         return activeTail ? activeTail.id : null
+    }
+
+    /**
+     * Get the tail block ID of a block.
+     * Example:
+     * - A // block
+     *   - B
+     *     - C // tail 
+     * @param {OpId} id 
+     * @returns {OpId}
+     */
+    #getTailId(id) {
+        const block = this.blocks[id]
+        if (block.childIds.length == 0) {
+            return id
+        }
+
+        return this.#getTailId(block.childIds[block.childIds.length - 1])
+    }
+
+    /**
+     * Get the nearest active block 
+     * @param {OpId} id we start our search from this ID and go down and up the tree from it
+     * @param {OpId} startAfterId in case if we need to skip child blocks and start our search after a given child ID
+     * @returns {{}}
+     */
+    #getActiveTailBlock(id, startAfterId) {
+        const block = this.blocks[id]
+
+        let activeChildBlock = null
+        let startLookingInChildblocks = startAfterId ? false : true
+
+        for (let i = block.childIds.length - 1; i >= 0; i--) {
+            const childBlock = this.blocks[block.childIds[i]]
+
+            if (startLookingInChildblocks) {
+                // Go down the tree and look for a tail active child block.
+                // We do it recursively until we find the tail
+                activeChildBlock = this.#getActiveTailBlock(block.childIds[i], null)
+                if (activeChildBlock != null) {
+                    break
+                }
+            }
+            else if (startAfterId && OpId.equals(childBlock.id, startAfterId)) {
+                startLookingInChildblocks = true
+            }
+        }
+
+        if (activeChildBlock == null && block.isActive) {
+            // Return the tail that is active
+            return block
+        }
+        else if (activeChildBlock == null && block.parentId != null) {
+            // Go up the tree because we haven't got a an active tail block yet
+            return this.#getActiveTailBlock(block.parentId, block.id)
+        }
+        else {
+            // Return an acgtive tail child block. That is the final step.
+            // We ether have a block or null here
+            return activeChildBlock
+        }
     }
 }

@@ -2,6 +2,26 @@ import { Editor } from "/js/editor2.js"
 
 console.log('Start Toy Editor')
 
+const editableNode = document.getElementById('myContentEditable');
+const observer = new MutationObserver(function (mutations) {
+    mutations.forEach(function (mutation) {
+        // Do something with the mutation record
+    });
+});
+
+const config = {
+    childList: true,
+    subtree: true,
+    characterData: true,
+    attributeOldValue: true,
+    characterDataOldValue: true,
+};
+
+observer.observe(editableNode, config);
+
+
+
+
 const mainContainerEl = document.getElementById('editors')
 
 const editors = [

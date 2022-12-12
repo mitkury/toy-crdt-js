@@ -1,8 +1,9 @@
 import { element, div, span, nodeHasDataId } from "/js/utils.js"
 import { OpId } from "/js/crdt/opId.js"
-import { TextCrdt } from "/js/crdt/textCrdt.js"
+import { ReplicatedTreeOfBlocks } from "/js/crdt/ReplicatedTreeOfBlocks.js"
 import { EditorSegment } from "/js/editorSegment.js"
 import { ActivationOperation, CreationOperation } from "/js/crdt/operations.js"
+import { diff, NOOP, REPLACE, DELETE, INSERT } from "/js/myersDiff.js"
 
 export class Editor extends EventTarget {
 
@@ -12,7 +13,7 @@ export class Editor extends EventTarget {
     #caret = null
     #observer = null
     #isOnline = false
-    textCrdt = null
+    replicatedBlocks = null
     #opsDidByClient = []
     #opsUndidByClient = []
     #ctrlIsPressed = false
@@ -63,7 +64,7 @@ export class Editor extends EventTarget {
          * @type {TextCrdt}
          * @private
          */
-        this.textCrdt = new TextCrdt(id)
+        this.replicatedBlocks = new ReplicatedTreeOfBlocks(id)
 
         div(inElement, containerEl => {
             containerEl.classList.add('editor')
@@ -115,10 +116,11 @@ export class Editor extends EventTarget {
                     if (e.key === 'Enter') {
                         e.preventDefault()
 
-                        // TODO: move to a separate function onNewLineCreations                        
+                        // TODO: move to a separate function onNewLineCreations   
+                                             
+                        /*
                         const anchorParentId = this.#getFirstSelectedNodeId()
 
-                        /*
                         // In that case we insert the new line before the anchor
                         if (selection.anchorOffset == 0 && anchorParentId) {
                             // Try to get the active node on the left
@@ -133,15 +135,14 @@ export class Editor extends EventTarget {
                         }
                         */
 
-                        const newBrId = this.textCrdt.getNewOperationId()
-                        const newSpanId = this.textCrdt.getNewOperationId()
+                        const newBrId = this.replicatedBlocks.getNewOperationId()
+                        const newSpanId = this.replicatedBlocks.getNewOperationId()
                         const ops = []
-                        ops.push(new CreationOperation(
+                        ops.push(new CreationOperation.newLine(
                             newBrId,
                             anchorParentId,
-                            null,
-                            'br'
                         ))
+                        /*
                         ops.push(new CreationOperation(
                             newSpanId,
                             newBrId,
@@ -150,6 +151,7 @@ export class Editor extends EventTarget {
                             '\u200B',
                             'span'
                         ))
+                        */
 
                         this.executeOperations(ops)
                         this.#addOpIdsToArrayOfOpsDidByClient(ops)
@@ -217,6 +219,7 @@ export class Editor extends EventTarget {
                 return
             }
 
+            /*
             // TODO: find the segment correctly
             const segment = this.#editorSegment
             if (segment) {
@@ -226,6 +229,7 @@ export class Editor extends EventTarget {
                     leftId: nodeId
                 }
             }
+            */
         })
 
         this.observeMutations()
@@ -246,7 +250,7 @@ export class Editor extends EventTarget {
     * @returns {OpId[]}
     */
     getOperations() {
-        return this.textCrdt.getOperations()
+        return this.replicatedBlocks.getOperations()
     }
 
     static #mutationConfig = {
@@ -356,13 +360,14 @@ export class Editor extends EventTarget {
                     for (var j = 0; j < mutation.removedNodes.length; j++) {
                         const node = mutation.removedNodes[j]
 
+                        /*
                         const segmentId = node.getAttribute('data-sid')
                         if (segmentId) {
                             const segment = this.#editorSegment
                             for (let i = 0; i < segment.nodeIds.length; i++) {
                                 const targetId = segment.nodeIds[i]
                                 ops.push(new ActivationOperation(
-                                    this.textCrdt.getNewOperationId(),
+                                    this.replicatedBlocks.getNewOperationId(),
                                     targetId,
                                     false
                                 ))
@@ -370,6 +375,7 @@ export class Editor extends EventTarget {
 
                             this.#editorSegment = null
                         }
+                        */
                     }
                 }
 
@@ -377,26 +383,27 @@ export class Editor extends EventTarget {
             // A mutation on a CharacterData node (text was edited)
             else if (mutation.type == 'characterData' && mutation.target.parentNode) {
                 const parentEl = mutation.target.parentNode
-                const segmentId = parentEl.getAttribute('data-sid')
+                const nodeId = parentEl.getAttribute('data-nid')
 
-                if (segmentId) {
+                if (nodeId) {
                     const oldValue = mutation.oldValue
                     const newValue = mutation.target.data
-                    const editorSegment = this.#editorSegment
-                    editorSegment.segmentEl.textContent = oldValue
+                    
+                    const editorSegment = this.#nodes[nodeId]
+                    editorSegment.textContent = oldValue
 
-                    const { insertions, deletions } = editorSegment.processMutation(oldValue, newValue)
+                    const { insertions, deletions } = this.#processTextMutation(nodeId, oldValue, newValue)
 
                     for (let i = 0; i < deletions.length; i++) {
-                        const nodeId = deletions[i]
+                        const blockId = deletions[i]
                         ops.push(new ActivationOperation(
-                            this.textCrdt.getNewOperationId(),
-                            nodeId,
+                            this.replicatedBlocks.getNewOperationId(),
+                            blockId,
                             false
                         ))
 
                         this.#caret = {
-                            leftId: this.textCrdt.crdtNodes[nodeId].parentId
+                            leftId: this.replicatedBlocks.blocks[blockId].parentId
                         }
                     }
 
@@ -407,8 +414,8 @@ export class Editor extends EventTarget {
                         for (let charIdx = 0; charIdx < value.length; charIdx++) {
                             let char = value[charIdx]
 
-                            const newOpId = this.textCrdt.getNewOperationId()
-                            const op = new CreationOperation(
+                            const newOpId = this.replicatedBlocks.getNewOperationId()
+                            const op = CreationOperation.newChar(
                                 newOpId,
                                 prevOpId,
                                 char,
@@ -436,7 +443,7 @@ export class Editor extends EventTarget {
                                 ))
 
                                 this.#caret = {
-                                    leftId: this.textCrdt.crdtNodes[nodeId].parentId
+                                    leftId: this.textCrdt.blocks[nodeId].parentId
                                 }
                             }
                         }
@@ -474,8 +481,8 @@ export class Editor extends EventTarget {
                         nodeLeftId = OpId.root()
                     }
 
-                    const op = new CreationOperation(
-                        this.textCrdt.getNewOperationId(),
+                    const op = CreationOperation.newChar(
+                        this.replicatedBlocks.getNewOperationId(),
                         nodeLeftId,
                         targetData,
                     )
@@ -507,25 +514,149 @@ export class Editor extends EventTarget {
         this.#updateCaretPos()
     }
 
+    #getBlockIdFromContent(blockIds, contentIndex) {
+        if (blockIds.length == 0) {
+            return null
+        }
+
+        const blocks = this.replicatedBlocks.blocks
+
+        if (contentIndex <= 0) {
+            const firstNode = blocks[blockIds[0]]
+            return firstNode.parentId
+        }
+
+        let contIdx = 0
+        for (var i = 0; i < blockIds.length; i++) {
+            const node = blocks[blockIds[i]]
+
+            contIdx += node.text.length
+
+            if (contIdx >= contentIndex) {
+                return node.id
+            }
+        }
+
+        return null
+    }
+
+    #processTextMutation(blockId, oldValue, newValue) {
+        const changes = diff(oldValue, newValue);
+        let sourceIndex = 0;
+        let targetIndex = 0;
+        let lastInsertionIdx = -2
+
+        // Gather batches of insertions and deletions
+        let insertions = []
+        let deletions = []
+
+        const blockIds = this.#blockInNodes[blockId]
+
+        for (let i = 0, { length } = changes; i < length; i++) {
+            switch (changes[i]) {
+                case REPLACE:
+                    // TODO: fix replacement
+                    const blockId = this.#getBlockIdFromContent(blockIds, sourceIndex + 1)
+                    deletions.push(blockId)
+
+                    /*
+                    insertions.push({
+                        leftId: nodeId,
+                        value: newValue[targetIndex]
+                    })
+                    */
+                    {
+                        let sourceInsertionIndex = targetIndex - 1
+                        if (sourceInsertionIndex > oldValue.length - 1) {
+                            sourceInsertionIndex = oldValue.length - 1
+                        }
+
+                        let insertion
+                        if (i == lastInsertionIdx + 1) {
+                            insertion = insertions[insertions.length - 1]
+                        } else {
+                            insertion = {
+                                leftId: this.#getBlockIdFromContent(blockIds, sourceInsertionIndex + 1),
+                                value: ""
+                            }
+                            insertions.push(insertion)
+                        }
+                        insertion.value += newValue[targetIndex]
+                    }
+
+                    lastInsertionIdx = i
+
+                    sourceIndex++;
+                    targetIndex++;
+                    break;
+
+                case NOOP:
+                    sourceIndex++;
+                    targetIndex++;
+                    break;
+
+                case DELETE:
+                    deletions.push(this.#getBlockIdFromContent(blockIds, sourceIndex + 1))
+                    sourceIndex++
+                    break;
+
+                case INSERT:
+                    let sourceInsertionIndex = targetIndex - 1
+                    if (sourceInsertionIndex > oldValue.length - 1) {
+                        sourceInsertionIndex = oldValue.length - 1
+                    }
+
+                    let insertion
+                    if (i == lastInsertionIdx + 1) {
+                        insertion = insertions[insertions.length - 1]
+                    } else {
+                        insertion = {
+                            leftId: this.#getBlockIdFromContent(blockIds, sourceInsertionIndex + 1),
+                            value: ""
+                        }
+                        insertions.push(insertion)
+                    }
+
+                    insertion.value += newValue[targetIndex]
+                    lastInsertionIdx = i
+
+                    // Note: Do I need to increase sourceIndex as well
+                    // when I insert within the source (not just appending)
+                    targetIndex++;
+                    break;
+            }
+        }
+
+        console.log("Insertions and deletions:")
+        console.log(insertions)
+        console.log(deletions)
+
+        return {
+            insertions: insertions,
+            deletions: deletions
+        }
+    }
+
+
     #getReverseOp(op) {
         let reverseOp = null
 
         if (op instanceof CreationOperation) {
             reverseOp = new ActivationOperation(
-                this.textCrdt.getNewOperationId(),
+                this.replicatedBlocks.getNewOperationId(),
                 op.getId(),
                 false
             )
         } else if (op instanceof ActivationOperation) {
             if (op.isSetToActivate()) {
                 reverseOp = new ActivationOperation(
-                    this.textCrdt.getNewOperationId(),
+                    this.replicatedBlocks.getNewOperationId(),
                     op.getTargetId(),
                     false
                 )
             } else {
                 reverseOp = new ActivationOperation(
-                    this.textCrdt.getNewOperationId(),
+                    this.replicatedBlocks.getNewOperationId(),
                     op.getTargetId(),
                     true
                 )
@@ -540,7 +671,7 @@ export class Editor extends EventTarget {
             return
         }
 
-        const opToUndo = this.textCrdt.operations[this.#opsDidByClient.pop()]
+        const opToUndo = this.replicatedBlocks.operations[this.#opsDidByClient.pop()]
         const reverseOp = this.#getReverseOp(opToUndo)
         this.#opsUndidByClient.push(reverseOp.getId())
         this.executeOperations([reverseOp])
@@ -558,7 +689,7 @@ export class Editor extends EventTarget {
             return
         }
 
-        const opToRedo = this.textCrdt.operations[this.#opsUndidByClient.pop()]
+        const opToRedo = this.replicatedBlocks.operations[this.#opsUndidByClient.pop()]
         const reverseOp = this.#getReverseOp(opToRedo)
         this.#opsDidByClient.push(reverseOp.getId())
         this.executeOperations([reverseOp])
@@ -571,6 +702,63 @@ export class Editor extends EventTarget {
         }))
     }
 
+    #nodeCounter = 0
+
+    #createSpanNode() {
+        const nodeEl = span(this.#editorEl)
+        const nodeId = this.#nodeCounter
+        this.#nodeCounter++
+        nodeEl.setAttribute('data-nid', nodeId)
+        this.#nodes[nodeId] = nodeEl
+        this.#blockInNodes[nodeId] = []
+        
+        return nodeEl
+    }
+
+    #createSpanNodeAfterNode(nodeId) {
+        const nodeOnTheLeftEl = this.#nodes[nodeId]
+        const newNode = this.#createSpanNode(nodeId)
+        this.editorEl.insertBefore(newNode, nodeOnTheLeftEl.nextSibling)
+        
+        return nodeEl
+    }
+
+    #nodes = {}
+    #blockInNodes = {}
+    #nodesWithBlocks = {}
+
+    #addBlockToTextNode(nodeId, block, targetLeftId) {
+        let [blockIndex, contentIndex] = this.#getNodeIndexAndContentIndex(nodeId, targetLeftId)
+        blockIndex++
+        contentIndex++
+
+        this.#blockInNodes[nodeId].splice(blockIndex, 0, block.id)
+        this.#nodesWithBlocks[block.id] = nodeId
+        const nodeEl = this.#nodes[nodeId]
+        const str = nodeEl.textContent
+
+        nodeEl.textContent =
+            str.slice(0, contentIndex) +
+            block.text +
+            str.slice(contentIndex)
+    }
+
+    #getNodeIndexAndContentIndex(nodeId, blockId) {
+        const nodeIds = this.#blockInNodes[nodeId]
+        let contentIndex = 0
+        for (var i = 0; i < nodeIds.length; i++) {
+            const node = this.replicatedBlocks.blocks[nodeIds[i]]
+
+            if (OpId.equals(node.id, blockId)) {
+                return [i, contentIndex]
+            }
+
+            contentIndex += node.text.length
+        }
+
+        return [-1, -1]
+    }
+
     #executeOperationsUnsafe(ops) {
         const editorEl = this.#editorEl
 
@@ -578,23 +766,42 @@ export class Editor extends EventTarget {
             return
         }
 
-        this.textCrdt.executeOperations(ops, (op, targetLeftId) => {
-            let segment = this.#editorSegment
-            if (!segment) {
-                const targetSegmentId = 0
-                const segmentEl = span(this.#editorEl)
-                segment = new EditorSegment(segmentEl, this)
-                segmentEl.setAttribute('data-sid', targetSegmentId)
-                this.#editorSegment = segment
-            }
-
+        this.replicatedBlocks.executeOperations(ops, (op, targetLeftBlockId) => {    
             if (op instanceof CreationOperation) {
-                segment.addNode(op.getId(), targetLeftId)
+
+                // Handle different types of blocks. For now, we only have text blocks
+                // We will implement new line blocks soon and then may follow
+                // with images, etc.
+
+                // Find a suitable text node to insert a new character after
+                let targetNode = null
+                let targetIndexInNode = 0
+                
+                if (OpId.equals(targetLeftBlockId, OpId.root())) {                    
+                    targetNode = editorEl.firstChild
+                    targetIndexInNode = 0
+
+                    if (!targetNode) {
+                        targetNode = this.#createSpanNode()
+                    }
+
+                    const block = this.replicatedBlocks.blocks[op.getId()]
+                    const nodeId = targetNode.getAttribute('data-nid')
+                    this.#addBlockToTextNode(nodeId, block, targetLeftBlockId)
+                } else {
+                    const targetNodeId = this.#nodesWithBlocks[targetLeftBlockId]
+                    const block = this.replicatedBlocks.blocks[op.getId()]
+                    this.#addBlockToTextNode(targetNodeId, block, targetLeftBlockId)
+                }
+
+                //segment.addNode(op.getId(), targetLeftId)
             } else if (op instanceof ActivationOperation) {
                 if (!op.isSetToActivate()) {
+                    // TODO: implement removing
                     segment.removeNode(op.getTargetId())
                 } else {
-                    segment.addNode(op.getTargetId(), targetLeftId)
+                    // TODO: impelemnt adding
+                    segment.addNode(op.getTargetId(), targetLeftBlockId)
                 }
 
             }
@@ -700,7 +907,7 @@ export class Editor extends EventTarget {
         for (let i = 0; i < selectedNodes.length; i++) {
             const targetId = selectedNodes[i]
             ops.push(new ActivationOperation(
-                this.textCrdt.getNewOperationId(),
+                this.replicatedBlocks.getNewOperationId(),
                 targetId,
                 false
             ))
@@ -716,7 +923,7 @@ export class Editor extends EventTarget {
 
         const pastedStr = e.clipboardData.getData('text/plain')
         for (let i = 0; i < pastedStr.length; i++) {
-            const newOpId = this.textCrdt.getNewOperationId()
+            const newOpId = this.replicatedBlocks.getNewOperationId()
             ops.push(new CreationOperation(
                 newOpId,
                 targetParentId,
@@ -738,7 +945,7 @@ export class Editor extends EventTarget {
         if (targetCaret.leftId) {
             const selection = window.getSelection()
 
-            const nodeOnTheLeftId = this.textCrdt.getActiveId(targetCaret.leftId)
+            const nodeOnTheLeftId = this.replicatedBlocks.getActiveId(targetCaret.leftId)
             if (nodeOnTheLeftId) {
                 const anchorNode = this.#domElements[nodeOnTheLeftId]
                 selection.setBaseAndExtent(anchorNode, 1, anchorNode, 1)

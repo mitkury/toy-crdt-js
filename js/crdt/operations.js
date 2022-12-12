@@ -5,8 +5,8 @@
 export class CreationOperation {
     #id
     #parentId
+    #type
     #value
-    #tagName
 
     /**
      * @returns {OpId}
@@ -23,30 +23,38 @@ export class CreationOperation {
     }
 
     /**
+     * @returns {Number} 0 - char, 1 - newline
+     */
+    getType() {
+        return this.#type
+    }
+
+    /**
      * @returns {String}
      */
     getValue() {
         return this.#value
     }
 
-    /**
-     * @returns {String}
-     */
-    getTagName() {
-        return this.#tagName
+    static newChar(id, parentId, value) {
+        return new CreationOperation(id, parentId, 0, value)
+    }
+
+    static newLine(id, parentId) { 
+        return new CreationOperation(id, parentId, 1, null)
     }
 
     /**
      * @param {OpId} id 
-     * @param {OpId} parentId 
+     * @param {OpId} parentId
+     * @param {Number} type
      * @param {String} value 
-     * @param {String} tagName 
      */
-    constructor(id, parentId, value, tagName) {
+    constructor(id, parentId, type, value) {
         this.#id = id
         this.#parentId = parentId
+        this.#type = type
         this.#value = value
-        this.#tagName = tagName
     }
 }
 
