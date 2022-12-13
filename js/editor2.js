@@ -118,9 +118,9 @@ export class Editor extends EventTarget {
 
                         // TODO: move to a separate function onNewLineCreations   
                                              
+                        const targetParentBlockId = this.#getFirstSelectedBlockId()
+                        
                         /*
-                        const anchorParentId = this.#getFirstSelectedNodeId()
-
                         // In that case we insert the new line before the anchor
                         if (selection.anchorOffset == 0 && anchorParentId) {
                             // Try to get the active node on the left
@@ -138,20 +138,17 @@ export class Editor extends EventTarget {
                         const newBrId = this.replicatedBlocks.getNewOperationId()
                         const newSpanId = this.replicatedBlocks.getNewOperationId()
                         const ops = []
-                        ops.push(new CreationOperation.newLine(
+                        ops.push(CreationOperation.newLine(
                             newBrId,
-                            anchorParentId,
+                            targetParentBlockId,
                         ))
-                        /*
-                        ops.push(new CreationOperation(
+                        ops.push(CreationOperation.newChar(
                             newSpanId,
                             newBrId,
-                            // Insert 'zero width space' in the span. Otherwise the caret 
+                            // Insert 'zero width space'. Otherwise the caret 
                             // doesn't want to go into an element without a text node
                             '\u200B',
-                            'span'
                         ))
-                        */
 
                         this.executeOperations(ops)
                         this.#addOpIdsToArrayOfOpsDidByClient(ops)
@@ -704,6 +701,7 @@ export class Editor extends EventTarget {
 
     #nodeCounter = 0
 
+    /*
     #createSpanNode() {
         const nodeEl = span(this.#editorEl)
         const nodeId = this.#nodeCounter
@@ -714,13 +712,41 @@ export class Editor extends EventTarget {
         
         return nodeEl
     }
+    */
 
-    #createSpanNodeAfterNode(nodeId) {
-        const nodeOnTheLeftEl = this.#nodes[nodeId]
-        const newNode = this.#createSpanNode(nodeId)
-        this.editorEl.insertBefore(newNode, nodeOnTheLeftEl.nextSibling)
-        
-        return nodeEl
+    #createNode(tag, nodeIdOnTheLeft) {
+        const newNodeEl = element(tag, this.#editorEl)
+        const newNodeId = this.#nodeCounter
+        this.#nodeCounter++
+        newNodeEl.setAttribute('data-nid', newNodeId)
+        this.#nodes[newNodeId] = newNodeEl
+        this.#blockInNodes[newNodeId] = []
+
+        if (nodeIdOnTheLeft != null) {
+            const nodeOnTheLeftEl = this.#nodes[nodeIdOnTheLeft]
+            this.#editorEl.insertBefore(newNodeEl, nodeOnTheLeftEl.nextSibling)
+
+        } 
+        // When it's null, we need to insert the new node at the beginning
+        else 
+        {
+            const firstChild = this.#editorEl.firstChild
+            if (firstChild) { 
+                this.#editorEl.insertBefore(newNodeEl, firstChild)
+            } else {
+                this.#editorEl.appendChild(newNodeEl)
+            }
+        }
+
+        return { newNodeEl, newNodeId }
+    }
+
+    #createSpanNode(nodeIdOnTheLeft) {
+        return this.#createNode('span', nodeIdOnTheLeft)
+    }
+
+    #createNewLineNode(nodeIdOnTheLeft) {
+        return this.#createNode('br', nodeIdOnTheLeft)
     }
 
     #nodes = {}
@@ -734,13 +760,18 @@ export class Editor extends EventTarget {
 
         this.#blockInNodes[nodeId].splice(blockIndex, 0, block.id)
         this.#nodesWithBlocks[block.id] = nodeId
+
         const nodeEl = this.#nodes[nodeId]
         const str = nodeEl.textContent
-
         nodeEl.textContent =
             str.slice(0, contentIndex) +
             block.text +
             str.slice(contentIndex)
+    }
+
+    #addBlockToNewLineNode(nodeId, block) {
+        this.#blockInNodes[nodeId] = [block.id]
+        this.#nodesWithBlocks[block.id] = nodeId
     }
 
     #getNodeIndexAndContentIndex(nodeId, blockId) {
@@ -773,28 +804,54 @@ export class Editor extends EventTarget {
                 // We will implement new line blocks soon and then may follow
                 // with images, etc.
 
-                // Find a suitable text node to insert a new character after
-                let targetNode = null
-                let targetIndexInNode = 0
-                
-                if (OpId.equals(targetLeftBlockId, OpId.root())) {                    
-                    targetNode = editorEl.firstChild
-                    targetIndexInNode = 0
+                const block = this.replicatedBlocks.blocks[op.getId()]
+                const newBlockIsChar = op.getType() == 0
+                const newBlockIsNewline = op.getType() == 1
+                let targetNodeId = null
 
-                    if (!targetNode) {
-                        targetNode = this.#createSpanNode()
+                if (OpId.equals(targetLeftBlockId, OpId.root())) {           
+                    if (newBlockIsChar) {
+                        let targetNode = editorEl.firstChild
+                        if (!targetNode) {
+                            let nodePair = this.#createSpanNode()
+                            targetNode = nodePair.newNodeEl
+                            targetNodeId = nodePair.newNodeId
+                        } else {
+                            targetNodeId = targetNode.getAttribute('data-nid')
+                        }
                     }
-
-                    const block = this.replicatedBlocks.blocks[op.getId()]
-                    const nodeId = targetNode.getAttribute('data-nid')
-                    this.#addBlockToTextNode(nodeId, block, targetLeftBlockId)
                 } else {
-                    const targetNodeId = this.#nodesWithBlocks[targetLeftBlockId]
-                    const block = this.replicatedBlocks.blocks[op.getId()]
-                    this.#addBlockToTextNode(targetNodeId, block, targetLeftBlockId)
+                    targetNodeId = this.#nodesWithBlocks[targetLeftBlockId]
                 }
 
-                //segment.addNode(op.getId(), targetLeftId)
+                if (newBlockIsChar) {
+                    // If targetLeftBlockId is a new line block
+                    // then we need to create a new span node after the 
+                    // new line node
+                    const leftBlock = this.replicatedBlocks.blocks[targetLeftBlockId]
+                    if (leftBlock.type == 1) {
+                        const { newNodeId } = this.#createSpanNode(targetNodeId)
+                        targetNodeId = newNodeId
+                    }
+
+                    this.#addBlockToTextNode(targetNodeId, block, targetLeftBlockId)
+                } else if (newBlockIsNewline) {
+                    const { newNodeId: newlineNodeId } = this.#createNewLineNode(targetNodeId)
+                    this.#addBlockToNewLineNode(newlineNodeId, block)
+
+                    // Detect if a node needs to be splitted
+                    // if the insertion point is in the middle of a text node
+                    // Gather blockIds from the node starting from block.id
+                    // Move the blockIds to the new node
+                    // Update the node's text content
+                    const blockIdsToSplit = this.#getBlockIdsFromNode(targetNodeId, targetLeftBlockId, null)
+                    if (blockIdsToSplit.length > 0) {
+                        const { newNodeId: newSpanNodeId } = this.#createSpanNode(newlineNodeId)
+                        this.#moveBlocksFromNodeToNode(targetNodeId, newSpanNodeId, blockIdsToSplit)
+                    }
+                } else {
+                    throw new Error('Unknown block type')
+                }
             } else if (op instanceof ActivationOperation) {
                 if (!op.isSetToActivate()) {
                     // TODO: implement removing
@@ -806,6 +863,38 @@ export class Editor extends EventTarget {
 
             }
         })
+    }
+
+    #getBlockIdsFromNode(nodeId, startBlockId, endBlockId) {
+        const blockIds = this.#blockInNodes[nodeId]
+
+        try {
+            const startBlockIndex = blockIds.indexOf(startBlockId) + 1
+            const endBlockIndex = endBlockId ? blockIds.indexOf(endBlockId) + 1 : blockIds.length
+            return blockIds.slice(startBlockIndex, endBlockIndex)
+        } catch {
+            return []
+        }
+    }
+
+    #moveBlocksFromNodeToNode(fromNodeId, toNodeId, blockIds) {
+        const fromNodeEl = this.#nodes[fromNodeId]
+        const toNodeEl = this.#nodes[toNodeId]
+
+        const fromNodeBlockIds = this.#blockInNodes[fromNodeId]
+        const toNodeBlockIds = this.#blockInNodes[toNodeId]
+
+        const text = blockIds.map(id => this.replicatedBlocks.blocks[id].text).join('')
+        toNodeEl.textContent += text
+
+        blockIds.forEach(id => {
+            fromNodeBlockIds.splice(fromNodeBlockIds.indexOf(id), 1)
+            toNodeBlockIds.push(id)
+            this.#nodesWithBlocks[id] = toNodeId
+        })
+
+        const fromNodeText = fromNodeBlockIds.map(id => this.replicatedBlocks.blocks[id].text).join('')
+        fromNodeEl.textContent = fromNodeText
     }
 
     #addOpIdsToArrayOfOpsDidByClient(ops) {
@@ -848,7 +937,7 @@ export class Editor extends EventTarget {
         return targetParentId
     }
 
-    #getFirstSelectedNodeId() {
+    #getFirstSelectedBlockId() {
         // Get the selected text from the window
         var selection = window.getSelection();
 
@@ -865,7 +954,11 @@ export class Editor extends EventTarget {
             return null
         }
 
-        return this.#editorSegment.getNodeId(range.startOffset)
+        const nodeId = range.startContainer.parentNode.getAttribute('data-nid')
+        const blockIds = this.#blockInNodes[nodeId]
+        const contentIndex = range.startOffset
+        
+        return this.#getBlockIdFromContent(blockIds, contentIndex)
     }   
 
     #getSelectedNodeIds() {
@@ -918,7 +1011,7 @@ export class Editor extends EventTarget {
         if (selectedNodes.length > 0) {
             targetParentId = selectedNodes[0]
         } else {
-            targetParentId = this.#getFirstSelectedNodeId()
+            targetParentId = this.#getFirstSelectedBlockId()
         }
 
         const pastedStr = e.clipboardData.getData('text/plain')
