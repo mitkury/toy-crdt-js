@@ -23,7 +23,7 @@ export class CreationOperation {
     }
 
     /**
-     * @returns {Number} 0 - char, 1 - newline
+     * @returns {Number} 0 - char, 1 - newline, 2 - paragraph
      */
     getType() {
         return this.#type
@@ -42,6 +42,10 @@ export class CreationOperation {
 
     static newLine(id, parentId) { 
         return new CreationOperation(id, parentId, 1, null)
+    }
+
+    static newParagraph(id, parentId) {
+        return new CreationOperation(id, parentId, 2, null)
     }
 
     /**

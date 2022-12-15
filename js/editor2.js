@@ -118,8 +118,36 @@ export class Editor extends EventTarget {
 
                         // TODO: move to a separate function onNewLineCreations   
                                              
-                        const targetParentBlockId = this.#getFirstSelectedBlockId()
-                        
+                        let targetParentBlockId = this.#getFirstSelectedBlockId()
+
+                        const isTargetBlockAParagraph = this.replicatedBlocks.blocks[targetParentBlockId].type == 2
+
+                        if (isTargetBlockAParagraph) { 
+                            const blocksInTargetParagraph = this.#blocksInNodes[targetParentBlockId]
+
+                            // In this case we're going to create a new paragraph
+                            // in front of the target paragraph, not after.
+                            // It means that the caret is at the beginning of the paragraph
+                            if (blocksInTargetParagraph.length > 0) {
+                                const targetParagraphNode = this.#nodes[targetParentBlockId]
+                                
+                                const prevSiblingNode = targetParagraphNode.previousSibling
+
+                                if (prevSiblingNode != null) {
+                                    targetParentBlockId = prevSiblingNode.getAttribute('data-id')
+
+                                    blocksInPrevNode = this.#blocksInNodes[targetParentBlockId]
+
+                                    if (blocksInPrevNode.length > 0) {
+                                        targetParentBlockId = blocksInPrevNode[blocksInPrevNode.length - 1]
+                                    }
+                                } 
+                                else {
+                                    targetParentBlockId = OpId.root()
+                                }
+                            }
+                        }
+
                         /*
                         // In that case we insert the new line before the anchor
                         if (selection.anchorOffset == 0 && anchorParentId) {
@@ -135,13 +163,23 @@ export class Editor extends EventTarget {
                         }
                         */
 
+                        const paragraphId = this.replicatedBlocks.getNewOperationId() 
                         const newBrId = this.replicatedBlocks.getNewOperationId()
                         const newSpanId = this.replicatedBlocks.getNewOperationId()
                         const ops = []
+                        
+                        ops.push(CreationOperation.newParagraph(paragraphId, targetParentBlockId))
+                        /*
                         ops.push(CreationOperation.newLine(
                             newBrId,
-                            targetParentBlockId,
+                            paragraphId,
                         ))
+                        */
+                        
+                        //const nodeId = this.#nodesWithBlocks[targetParentBlockId]
+                        //this.#createSpanNode(nodeId)
+
+                        /*
                         ops.push(CreationOperation.newChar(
                             newSpanId,
                             newBrId,
@@ -149,6 +187,7 @@ export class Editor extends EventTarget {
                             // doesn't want to go into an element without a text node
                             '\u200B',
                         ))
+                        */
 
                         this.executeOperations(ops)
                         this.#addOpIdsToArrayOfOpsDidByClient(ops)
@@ -305,6 +344,8 @@ export class Editor extends EventTarget {
                             }
                             // Adding an element in any other kind of node
                             else {
+                                return
+
                                 // We don't add a span that is empty or doesn't have crdtNodes
                                 const makesSenseToAdd = node.tagName != 'SPAN' && node && !nodeHasDataId(node.childNodes)
 
@@ -332,6 +373,25 @@ export class Editor extends EventTarget {
                         // Text
                         else if (node.nodeType === 3) {
                             if (node.parentNode.childNodes.length == 1) {
+
+                                /*
+                                const prevNode = node.previousSibling
+                                let targetLeftBlockId = null
+                                
+                                if (prevNode) {
+                                    // TODO: 
+                                }
+
+                                // TODO: account for multiple chars in data
+                                const char = node.data 
+
+                                const newOpId = this.replicatedBlocks.getNewOperationId()
+                                ops.push(CreationOperation.newChar(
+                                    newOpId,
+                                    targetLeftBlockId,
+                                    char,
+                                ))
+                                */
 
                                 // TODO: create a new segment
 
@@ -382,6 +442,7 @@ export class Editor extends EventTarget {
                 const parentEl = mutation.target.parentNode
                 const nodeId = parentEl.getAttribute('data-nid')
 
+                // Inide the node
                 if (nodeId) {
                     const oldValue = mutation.oldValue
                     const newValue = mutation.target.data
@@ -467,29 +528,26 @@ export class Editor extends EventTarget {
                         }
                     })
                     */
-                } else {
+                } 
+                // Outside of the node
+                else 
+                {
                     const targetData = mutation.target.data
-                    const segment = this.#editorSegment
-                    let nodeLeftId = null
-                    // Here we get targetLeftId from the last node of the previous segment
-                    if (segment) {
-                        nodeLeftId = OpId.root()
-                    } else {
-                        nodeLeftId = OpId.root()
-                    }
+                    const blockLeftId = OpId.root()
 
-                    const op = CreationOperation.newChar(
-                        this.replicatedBlocks.getNewOperationId(),
-                        nodeLeftId,
+                    const paragraphId = this.replicatedBlocks.getNewOperationId()
+                    ops.push(CreationOperation.newParagraph(paragraphId, blockLeftId))
+                    const newCharBlockId = this.replicatedBlocks.getNewOperationId()
+                    ops.push(CreationOperation.newChar(
+                        newCharBlockId,
+                        paragraphId,
                         targetData,
-                    )
+                    )) 
 
                     target.remove()
 
-                    ops.push(op)
-
                     this.#caret = {
-                        leftId: nodeLeftId
+                        leftId: newCharBlockId
                     }
                 }
             }
@@ -511,9 +569,11 @@ export class Editor extends EventTarget {
         this.#updateCaretPos()
     }
 
-    #getBlockIdFromContent(blockIds, contentIndex) {
-        if (blockIds.length == 0) {
-            return null
+    #getBlockIdFromContent(blockId, contentIndex) {
+        const blockIds = this.#blocksInNodes[blockId]
+
+        if (blockIds.length == 0) {        
+            return blockId
         }
 
         const blocks = this.replicatedBlocks.blocks
@@ -537,31 +597,40 @@ export class Editor extends EventTarget {
         return null
     }
 
-    #processTextMutation(blockId, oldValue, newValue) {
-        const changes = diff(oldValue, newValue);
-        let sourceIndex = 0;
-        let targetIndex = 0;
+    #getBlockIndexAndContentIndex(containerBlockId, targetBlockId) {
+        const blockIds = this.#blocksInNodes[containerBlockId]
+
+        let contentIndex = 0
+        for (var i = 0; i < blockIds.length; i++) {
+            const block = this.replicatedBlocks.blocks[blockIds[i]]
+
+            if (OpId.equals(block.id, targetBlockId)) {
+                return [i, contentIndex]
+            }
+
+            contentIndex += block.text.length
+        }
+
+        return [-1, -1]
+    }
+
+    #processTextMutation(targetContainerBlockId, oldValue, newValue) {
+        const changes = diff(oldValue, newValue)
+        let sourceIndex = 0
+        let targetIndex = 0
         let lastInsertionIdx = -2
 
         // Gather batches of insertions and deletions
         let insertions = []
         let deletions = []
 
-        const blockIds = this.#blockInNodes[blockId]
-
         for (let i = 0, { length } = changes; i < length; i++) {
             switch (changes[i]) {
                 case REPLACE:
                     // TODO: fix replacement
-                    const blockId = this.#getBlockIdFromContent(blockIds, sourceIndex + 1)
+                    const blockId = this.#getBlockIdFromContent(targetContainerBlockId, sourceIndex + 1)
                     deletions.push(blockId)
-
-                    /*
-                    insertions.push({
-                        leftId: nodeId,
-                        value: newValue[targetIndex]
-                    })
-                    */
+                    
                     {
                         let sourceInsertionIndex = targetIndex - 1
                         if (sourceInsertionIndex > oldValue.length - 1) {
@@ -573,7 +642,7 @@ export class Editor extends EventTarget {
                             insertion = insertions[insertions.length - 1]
                         } else {
                             insertion = {
-                                leftId: this.#getBlockIdFromContent(blockIds, sourceInsertionIndex + 1),
+                                leftId: this.#getBlockIdFromContent(targetContainerBlockId, sourceInsertionIndex + 1),
                                 value: ""
                             }
                             insertions.push(insertion)
@@ -593,7 +662,7 @@ export class Editor extends EventTarget {
                     break;
 
                 case DELETE:
-                    deletions.push(this.#getBlockIdFromContent(blockIds, sourceIndex + 1))
+                    deletions.push(this.#getBlockIdFromContent(targetContainerBlockId, sourceIndex + 1))
                     sourceIndex++
                     break;
 
@@ -608,7 +677,7 @@ export class Editor extends EventTarget {
                         insertion = insertions[insertions.length - 1]
                     } else {
                         insertion = {
-                            leftId: this.#getBlockIdFromContent(blockIds, sourceInsertionIndex + 1),
+                            leftId: this.#getBlockIdFromContent(targetContainerBlockId, sourceInsertionIndex + 1),
                             value: ""
                         }
                         insertions.push(insertion)
@@ -623,10 +692,6 @@ export class Editor extends EventTarget {
                     break;
             }
         }
-
-        console.log("Insertions and deletions:")
-        console.log(insertions)
-        console.log(deletions)
 
         return {
             insertions: insertions,
@@ -706,7 +771,6 @@ export class Editor extends EventTarget {
         const nodeEl = span(this.#editorEl)
         const nodeId = this.#nodeCounter
         this.#nodeCounter++
-        nodeEl.setAttribute('data-nid', nodeId)
         this.#nodes[nodeId] = nodeEl
         this.#blockInNodes[nodeId] = []
         
@@ -714,13 +778,21 @@ export class Editor extends EventTarget {
     }
     */
 
-    #createNode(tag, nodeIdOnTheLeft) {
+    #createNode(tag, blockId, nodeIdOnTheLeft) {
         const newNodeEl = element(tag, this.#editorEl)
-        const newNodeId = this.#nodeCounter
-        this.#nodeCounter++
-        newNodeEl.setAttribute('data-nid', newNodeId)
-        this.#nodes[newNodeId] = newNodeEl
-        this.#blockInNodes[newNodeId] = []
+        //const newNodeId = this.#nodeCounter
+        //this.#nodeCounter++
+        newNodeEl.setAttribute('data-nid', blockId)
+        this.#nodes[blockId] = newNodeEl
+        this.#blocksInNodes[blockId] = []
+        this.#nodesWithBlocks[blockId] = blockId
+
+        if (tag == 'p') {
+            const textNode = document.createTextNode('')
+            const brNode = document.createElement("br")
+            newNodeEl.appendChild(textNode)
+            newNodeEl.appendChild(brNode)
+        }
 
         if (nodeIdOnTheLeft != null) {
             const nodeOnTheLeftEl = this.#nodes[nodeIdOnTheLeft]
@@ -738,19 +810,19 @@ export class Editor extends EventTarget {
             }
         }
 
-        return { newNodeEl, newNodeId }
+        return { newNodeEl, newNodeId: blockId }
     }
 
-    #createSpanNode(nodeIdOnTheLeft) {
-        return this.#createNode('span', nodeIdOnTheLeft)
+    #createParagraphNode(blockId, nodeIdOnTheLeft) {
+        return this.#createNode('p', blockId, nodeIdOnTheLeft)
     }
 
-    #createNewLineNode(nodeIdOnTheLeft) {
-        return this.#createNode('br', nodeIdOnTheLeft)
+    #createNewLineNode(blockId, nodeIdOnTheLeft) {
+        return this.#createNode('br', blockId, nodeIdOnTheLeft)
     }
 
     #nodes = {}
-    #blockInNodes = {}
+    #blocksInNodes = {}
     #nodesWithBlocks = {}
 
     #addBlockToTextNode(nodeId, block, targetLeftId) {
@@ -758,7 +830,7 @@ export class Editor extends EventTarget {
         blockIndex++
         contentIndex++
 
-        this.#blockInNodes[nodeId].splice(blockIndex, 0, block.id)
+        this.#blocksInNodes[nodeId].splice(blockIndex, 0, block.id)
         this.#nodesWithBlocks[block.id] = nodeId
 
         const nodeEl = this.#nodes[nodeId]
@@ -769,13 +841,27 @@ export class Editor extends EventTarget {
             str.slice(contentIndex)
     }
 
+    #removeBlockFromTextNode(blockId) {
+        const nodeId = this.#nodesWithBlocks[blockId]
+        const block = this.replicatedBlocks.blocks[blockId]
+        const [blockIndex, contentIndex] = this.#getNodeIndexAndContentIndex(nodeId, blockId)
+        this.#blocksInNodes[nodeId].splice(blockIndex, 1)
+        delete this.#nodesWithBlocks[blockId]
+
+        const nodeEl = this.#nodes[nodeId]
+        const str = nodeEl.textContent
+        nodeEl.textContent =
+            str.slice(0, contentIndex) +
+            str.slice(contentIndex + block.text.length)
+    }
+
     #addBlockToNewLineNode(nodeId, block) {
-        this.#blockInNodes[nodeId] = [block.id]
+        this.#blocksInNodes[nodeId] = [block.id]
         this.#nodesWithBlocks[block.id] = nodeId
     }
 
     #getNodeIndexAndContentIndex(nodeId, blockId) {
-        const nodeIds = this.#blockInNodes[nodeId]
+        const nodeIds = this.#blocksInNodes[nodeId]
         let contentIndex = 0
         for (var i = 0; i < nodeIds.length; i++) {
             const node = this.replicatedBlocks.blocks[nodeIds[i]]
@@ -799,7 +885,6 @@ export class Editor extends EventTarget {
 
         this.replicatedBlocks.executeOperations(ops, (op, targetLeftBlockId) => {    
             if (op instanceof CreationOperation) {
-
                 // Handle different types of blocks. For now, we only have text blocks
                 // We will implement new line blocks soon and then may follow
                 // with images, etc.
@@ -807,18 +892,23 @@ export class Editor extends EventTarget {
                 const block = this.replicatedBlocks.blocks[op.getId()]
                 const newBlockIsChar = op.getType() == 0
                 const newBlockIsNewline = op.getType() == 1
+                const newBLockIsParagraph = op.getType() == 2
                 let targetNodeId = null
 
                 if (OpId.equals(targetLeftBlockId, OpId.root())) {           
                     if (newBlockIsChar) {
                         let targetNode = editorEl.firstChild
-                        if (!targetNode) {
-                            let nodePair = this.#createSpanNode()
-                            targetNode = nodePair.newNodeEl
-                            targetNodeId = nodePair.newNodeId
+                        targetNodeId = targetNode.getAttribute('data-nid')
+                        /*
+                        let targetNode = editorEl.firstChild
+                        if (!targetNode || targetNode.nodeName == 'BR') {
+                            const { newNodeEl, newNodeId } = this.#createParagraphNode()
+                            targetNode = newNodeEl
+                            targetNodeId = newNodeId
                         } else {
                             targetNodeId = targetNode.getAttribute('data-nid')
                         }
+                        */
                     }
                 } else {
                     targetNodeId = this.#nodesWithBlocks[targetLeftBlockId]
@@ -830,13 +920,13 @@ export class Editor extends EventTarget {
                     // new line node
                     const leftBlock = this.replicatedBlocks.blocks[targetLeftBlockId]
                     if (leftBlock.type == 1) {
-                        const { newNodeId } = this.#createSpanNode(targetNodeId)
+                        const { newNodeId } = this.#createParagraphNode(targetNodeId)
                         targetNodeId = newNodeId
                     }
 
                     this.#addBlockToTextNode(targetNodeId, block, targetLeftBlockId)
                 } else if (newBlockIsNewline) {
-                    const { newNodeId: newlineNodeId } = this.#createNewLineNode(targetNodeId)
+                    const { newNodeId: newlineNodeId } = this.#createNewLineNode(block.id, targetNodeId)
                     this.#addBlockToNewLineNode(newlineNodeId, block)
 
                     // Detect if a node needs to be splitted
@@ -846,16 +936,22 @@ export class Editor extends EventTarget {
                     // Update the node's text content
                     const blockIdsToSplit = this.#getBlockIdsFromNode(targetNodeId, targetLeftBlockId, null)
                     if (blockIdsToSplit.length > 0) {
-                        const { newNodeId: newSpanNodeId } = this.#createSpanNode(newlineNodeId)
+                        const { newNodeId: newSpanNodeId } = this.#createParagraphNode(newlineNodeId)
                         this.#moveBlocksFromNodeToNode(targetNodeId, newSpanNodeId, blockIdsToSplit)
                     }
-                } else {
+                } 
+                else if (newBLockIsParagraph) {
+                    const { newNodeId } = this.#createParagraphNode(block.id, targetNodeId)
+                }
+                else {
                     throw new Error('Unknown block type')
                 }
             } else if (op instanceof ActivationOperation) {
                 if (!op.isSetToActivate()) {
-                    // TODO: implement removing
-                    segment.removeNode(op.getTargetId())
+                    // TODO: implement removing of paragraps
+                    
+                    this.#removeBlockFromTextNode(op.getTargetId())
+
                 } else {
                     // TODO: impelemnt adding
                     segment.addNode(op.getTargetId(), targetLeftBlockId)
@@ -866,7 +962,7 @@ export class Editor extends EventTarget {
     }
 
     #getBlockIdsFromNode(nodeId, startBlockId, endBlockId) {
-        const blockIds = this.#blockInNodes[nodeId]
+        const blockIds = this.#blocksInNodes[nodeId]
 
         try {
             const startBlockIndex = blockIds.indexOf(startBlockId) + 1
@@ -881,8 +977,8 @@ export class Editor extends EventTarget {
         const fromNodeEl = this.#nodes[fromNodeId]
         const toNodeEl = this.#nodes[toNodeId]
 
-        const fromNodeBlockIds = this.#blockInNodes[fromNodeId]
-        const toNodeBlockIds = this.#blockInNodes[toNodeId]
+        const fromNodeBlockIds = this.#blocksInNodes[fromNodeId]
+        const toNodeBlockIds = this.#blocksInNodes[toNodeId]
 
         const text = blockIds.map(id => this.replicatedBlocks.blocks[id].text).join('')
         toNodeEl.textContent += text
@@ -955,10 +1051,9 @@ export class Editor extends EventTarget {
         }
 
         const nodeId = range.startContainer.parentNode.getAttribute('data-nid')
-        const blockIds = this.#blockInNodes[nodeId]
         const contentIndex = range.startOffset
         
-        return this.#getBlockIdFromContent(blockIds, contentIndex)
+        return this.#getBlockIdFromContent(nodeId, contentIndex)
     }   
 
     #getSelectedNodeIds() {
@@ -1049,29 +1144,32 @@ export class Editor extends EventTarget {
     #updateCaretPos() {
         const targetCaret = this.#caret
         if (targetCaret != null && targetCaret.leftId) {
-            const segment = this.#editorSegment
-            if (!segment) {
-                return
+            const containerBlockId = this.#nodesWithBlocks[targetCaret.leftId]
+            const nodeEl = this.#nodes[containerBlockId]
+            const blockId = targetCaret.leftId
+            const range = document.createRange()
+            const selection = window.getSelection()
+            const textEl = nodeEl.childNodes[0]
+            let [_, contentIndex] = this.#getBlockIndexAndContentIndex(containerBlockId, blockId)
+
+            const targetForRange = textEl ? textEl : nodeEl
+
+            if (textEl) {
+                const maxContentOffset = textEl.textContent.length - 1
+                // Clamp contentIndex: [0, maxContentOffset]
+                contentIndex = Math.min(Math.max(contentIndex, 0), maxContentOffset)                
+            } else {
+                contentIndex - 1
             }
 
-            let [_, contentIndex] = segment.getNodeIndexAndContentIndex(targetCaret.leftId)
-            const textEl = segment.segmentEl.childNodes[0]
-            const range = document.createRange();
-
-            // Clamp contentIndex: [0, maxContentOffset]
-            const maxContentOffset = textEl.textContent.length - 1
-            contentIndex = Math.min(Math.max(contentIndex, 0), maxContentOffset);
-
             try {
-                range.setStart(textEl, contentIndex + 1)
+                range.setStart(targetForRange, contentIndex + 1)
                 range.collapse(true)
-                const selection = window.getSelection()
                 selection.removeAllRanges()
                 selection.addRange(range)
             } catch (e) {
                 console.error(e)
             }
-
         }
     }
 }
