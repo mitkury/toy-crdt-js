@@ -2,24 +2,72 @@ import { Editor } from "/js/editor2.js"
 
 console.log('Start Toy Editor')
 
+/*
 const editableNode = document.getElementById('myContentEditable');
 const observer = new MutationObserver(function (mutations) {
-    mutations.forEach(function (mutation) {
-        // Do something with the mutation record
-    });
+    stopObservingMutations()
+
+    // For each mutation record...
+    for (const mutation of mutations) {
+        // If the mutation is a childList mutation (i.e. nodes were added or removed)...
+        if (mutation.type === 'childList') {
+            // For each node that was added...
+            for (const node of mutation.addedNodes) {
+                // Remove the node from the DOM
+                node.remove();
+            }
+            // For each node that was removed...
+            for (const node of mutation.removedNodes) {
+                // Re-add the node to the DOM at the same position it was removed from
+                if (mutation.nextSibling) {
+                    mutation.target.insertBefore(node, mutation.nextSibling);
+                } else {
+                    mutation.target.appendChild(node);
+                }
+            }
+        }
+        // If the mutation is an attribute mutation (i.e. an attribute was added, modified, or removed)...
+        else if (mutation.type === 'attributes') {
+            // If the attribute was modified or removed...
+            if (mutation.oldValue) {
+                // Set the attribute to its previous value
+                mutation.target.setAttribute(mutation.attributeName, mutation.oldValue);
+            }
+            // If the attribute was added...
+            else {
+                // Remove the attribute
+                mutation.target.removeAttribute(mutation.attributeName);
+            }
+        }
+        // If the mutation is a characterData mutation (i.e. the data of a text node was modified)...
+        else if (mutation.type === 'characterData') {
+            // Set the text node's data to its previous value
+            mutation.target.data = mutation.oldValue;
+        }
+    }
+
+    observeMutations()
 });
 
 const config = {
     childList: true,
     subtree: true,
+    attributes: true,
     characterData: true,
     attributeOldValue: true,
     characterDataOldValue: true,
 };
 
-observer.observe(editableNode, config);
+observeMutations()
 
+function observeMutations() {
+    observer.observe(editableNode, config)
+}
 
+function stopObservingMutations() {
+    observer.disconnect()
+}
+*/
 
 
 const mainContainerEl = document.getElementById('editors')
