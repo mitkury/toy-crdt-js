@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Toy CRDT Editor</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- The whiteboard canvas element -->
+    <canvas id="whiteboard"></canvas>
+
+    <!-- The toolbar with shape buttons -->
+    <div id="toolbar">
+    <button id="rectangle-button">Rectangle</button>
+    <button id="circle-button">Circle</button>
+    <button id="triangle-button">Triangle</button>
+    </div>
+
+    <!-- The color picker input -->
+    <input type="color" id="color-picker">
+
+    <div id="editors"></div>
+    <script type="module" src="js/board.js"></script>
+</body>
+
+</html>

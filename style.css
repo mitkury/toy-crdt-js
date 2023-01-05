@@ -1,3 +1,7 @@
+* {
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+}
+
 #editors {
     width: 100%;
     max-width: 100%;
@@ -5,9 +9,6 @@
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 10px;
-}
-
-.editor {
 }
 
 .content {
@@ -22,3 +23,123 @@
 .editor p {
     margin: 0;
 }
+
+.demo {
+    display: flex;
+    max-width: 700px;
+    width: 100%;
+}
+
+.demo-card {
+    position: relative;
+    width: 160px;
+    background-color: #DEDEDE;
+    text-align: center;
+    border-radius: 8px;
+    font-size: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+}
+
+.demo-card .title {
+    height: 38px;
+    line-height: 38px;
+    color: #fff;
+}
+
+.demo-card[data-card-no="1"] .title {
+    background-color: #F40404;
+}
+
+.demo-card[data-card-no="2"] .title {
+    background-color: #0C48CC;
+}
+
+.demo-card[data-card-no="3"] .title {
+    background-color: #2CB494;
+}
+
+.demo-card[data-card-no="4"] .title {
+    background-color: #88409C;
+}
+
+.demo-card[data-card-no="5"] .title {
+    background-color: #F88C14;
+}
+
+.demo-card[data-card-no="6"] .title {
+    background-color: #703014;
+}
+
+.demo-card .value {
+    font-size: 64px;
+    line-height: 100px;
+    font-weight: 600;
+}
+
+.demo-card .button-wrapper {
+    padding: 14px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.demo-card .button-wrapper .button {
+    flex-grow: 1;
+}
+
+.demo .sync-button-wrapper {
+    position: relative;
+    justify-content: center;
+    display: flex;
+    flex-grow: 1;
+}
+
+.demo .sync-button-wrapper .button {
+    
+}
+
+.demo .sync-button-wrapper .button {
+    margin: 70px 10px 0 10px;
+    position: relative;
+}
+
+/* Line */
+.demo .sync-button-wrapper:before {
+    display: block;
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 89px;
+    width: 100%;
+    height: 2px;
+    background-color: #000;
+    z-index: 0;
+}
+
+.demo .sync-button-wrapper.disabled:before {
+    background-color: #DEDEDE;
+}
+
+.button {
+    display: inline-block;
+    height: 38px;
+    line-height: 38px;
+    padding: 0 10px 0 10px;
+    border-radius: 8px;
+    background-color: #000000;
+    color: #fff;
+    cursor: pointer;
+    user-select: none;
+}
+
+.disabled .button {
+    background-color: #DEDEDE;
+    color: #000;
+    cursor: default;
+}
+
+.demo-card.counter {
+    
+}
+
