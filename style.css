@@ -26,8 +26,10 @@
 
 .demo {
     display: flex;
-    max-width: 700px;
+    max-width: 800px;
     width: 100%;
+    margin: 0 auto;
+    margin-bottom: 38px;
 }
 
 .demo-card {
@@ -88,24 +90,33 @@
     flex-grow: 1;
 }
 
+.demo-card .button-wrapper-2-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-gap: 10px;
+    padding: 14px;
+}
+
+.demo-card .button-wrapper-2-buttons .button {
+
+}
+
 .demo .sync-button-wrapper {
     position: relative;
     justify-content: center;
     display: flex;
     flex-grow: 1;
-}
-
-.demo .sync-button-wrapper .button {
-    
+    z-index: 1;
 }
 
 .demo .sync-button-wrapper .button {
     margin: 70px 10px 0 10px;
     position: relative;
+    z-index: 1;
 }
 
 /* Line */
-.demo .sync-button-wrapper:before {
+.demo .sync-button-wrapper .connection {
     display: block;
     content: "";
     position: absolute;
@@ -117,8 +128,36 @@
     z-index: 0;
 }
 
-.demo .sync-button-wrapper.disabled:before {
-    background-color: #DEDEDE;
+.demo .sync-button-wrapper .connection:before {
+    display: block;
+    content: "";
+    position: absolute;
+    left: -4px;
+    top: -3px;
+    width: 8px;
+    height: 8px;
+    background-color: #000;
+    border-radius: 100%;
+    z-index: 100;
+}
+
+.demo .sync-button-wrapper .connection:after {
+    display: block;
+    content: "";
+    position: absolute;
+    right: -4px;
+    top: -3px;
+    width: 8px;
+    height: 8px;
+    background-color: #000;
+    border-radius: 100%;
+    z-index: 100;
+}
+
+.demo .sync-button-wrapper.disabled .connection,
+.demo .sync-button-wrapper.disabled .connection:before,
+.demo .sync-button-wrapper.disabled .connection:after {
+    background-color: #A0A0A0;
 }
 
 .button {
@@ -133,9 +172,16 @@
     user-select: none;
 }
 
+.button svg {
+    position: relative;
+    top: -2px;
+    width: 24px;
+    height: 24px;
+    vertical-align: middle;
+}
+
 .disabled .button {
-    background-color: #DEDEDE;
-    color: #000;
+    background-color: #A0A0A0;
     cursor: default;
 }
 
