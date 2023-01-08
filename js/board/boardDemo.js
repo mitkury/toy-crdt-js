@@ -1,51 +1,56 @@
 import { element, div, span, nodeHasDataId } from "/js/utils.js"
 
-class BoardView extends EventTarget  {
+class BoardView extends EventTarget {
     #peerId
     #properties
     #canvasEl
     #toolsEl
+    #entities = new Map()
+    #entityCount
+    #draggingEntitiesOffset = new Map()
 
     constructor(parentElement, peerId) {
         super()
 
         this.#peerId = peerId
-        
+
+        this.#entityCount = 0
+
         const amountOfCardsInParent = parentElement.getElementsByClassName('demo-card').length;
-        const containerEl = div(parentElement, demoCardEl => { 
+        const containerEl = div(parentElement, demoCardEl => {
             demoCardEl.classList.add('demo-card')
             demoCardEl.classList.add('board')
         })
         containerEl.setAttribute('data-card-no', amountOfCardsInParent + 1)
-        
-        div(containerEl, el => { 
-            el.classList.add('title') 
+
+        div(containerEl, el => {
+            el.classList.add('title')
             el.innerText = 'User ' + this.#peerId
         })
 
-        this.#canvasEl = div(containerEl, canvasEl => { 
+        this.#canvasEl = div(containerEl, canvasEl => {
             canvasEl.classList.add('canvas')
 
-            canvasEl.addEventListener('click', e => {
+            canvasEl.addEventListener('click', event => {
                 const selectedToolEl = this.#getSelectedToolEl()
 
-                const x = e.offsetX
-                const y = e.offsetY
+                const { x, y } = this.#getPositionOnCanvas(event)
 
                 if (selectedToolEl) {
-                    console.log(selectedToolEl)
 
                     const tool = selectedToolEl.getAttribute('data-tool')
+                    const entityId = this.#peerId + '-' + this.#entityCount
+                    this.#entityCount++
 
                     const entityEl = div(canvasEl, entityEl => {
                         entityEl.classList.add('entity')
-                        entityEl.setAttribute('data-id', '1')
+                        entityEl.setAttribute('data-id', entityId)
 
                         const width = 50
                         const height = 50
 
                         entityEl.style.width = width + 'px'
-                        entityEl.style.height = height + 'px' 
+                        entityEl.style.height = height + 'px'
 
                         entityEl.style.left = x - width / 2 + 'px'
                         entityEl.style.top = y - height / 2 + 'px'
@@ -54,25 +59,25 @@ class BoardView extends EventTarget  {
                             case 'shape':
                                 const shape = selectedToolEl.getAttribute('data-shape')
                                 const color = selectedToolEl.getAttribute('data-color')
-    
-                                div(entityEl, shapeEl => {
+
+                                entityEl = div(entityEl, shapeEl => {
                                     shapeEl.classList.add('shape')
                                     shapeEl.setAttribute('data-shape', shape)
-        
+
                                     if (shape == 'triangle') {
                                         shapeEl.style.borderWidth = `${width / 2}px 0px ${height / 2}px ${width}px`
                                         shapeEl.style.borderColor = `transparent transparent transparent ${color}`
                                     } else {
                                         shapeEl.style.backgroundColor = color
                                     }
-                                    
+
                                 })
-    
+
                                 break
                             case 'emoji':
                                 const emoji = selectedToolEl.getAttribute('data-emoji')
 
-                                div(entityEl, emojiEl => {
+                                entityEl = div(entityEl, emojiEl => {
                                     emojiEl.classList.add('emoji')
                                     emojiEl.innerText = emoji
                                     emojiEl.style.fontSize = height + 'px'
@@ -80,21 +85,96 @@ class BoardView extends EventTarget  {
 
                                 break
                         }
-
-
                     })
+
+                    selectedToolEl.classList.remove('selected')
+
+                    this.#entities.set(entityId, entityEl)
+
+                    entityEl.addEventListener('click', _ => {
+                        const isSelected = entityEl.classList.contains('selected')
+
+                        if (isSelected) {
+                            entityEl.classList.remove('selected')
+                        } else {
+                            const selectedEntities = canvasEl.querySelectorAll('.entity.selected')
+                            selectedEntities.forEach(entityEl => {
+                                entityEl.classList.remove('selected')
+                            })
+
+                            entityEl.classList.add('selected')
+                        }
+                    })
+
+                    entityEl.addEventListener('mousedown', this.#dragStart.bind(this))
                 }
             })
         })
 
+        this.#canvasEl.addEventListener('mouseup', this.#dragEnd.bind(this))
+        this.#canvasEl.addEventListener('mousemove', this.#drag.bind(this))
+
         this.#toolsEl = div(containerEl, toolsPanelEl => {
             toolsPanelEl.classList.add('tools')
-            
-            
         })
-    
+
+        document.addEventListener('keydown', event => {
+            const selectedEntities = this.#canvasEl.querySelectorAll('.entity.selected')
+            if (selectedEntities.length > 0) {
+                if (event.key == 'Backspace' || event.key == 'Delete') {
+                    selectedEntities.forEach(entityEl => {
+                        const entityId = entityEl.getAttribute('data-id')
+                        this.#entities.delete(entityId)
+                        entityEl.remove()
+                    })
+                }
+            }
+        })
+
         this.#createTools()
         this.#setColorToAllShapeTools('#1E4FFF')
+    }
+
+    #dragStart(event) {               
+        const entityEl = event.target.closest('.entity')
+        if (entityEl) {
+            entityEl.classList.add('dragging')
+
+            const rect = entityEl.getBoundingClientRect();
+            const offsetX = event.clientX - rect.left;
+            const offsetY = event.clientY - rect.top;
+            const entityId = entityEl.getAttribute('data-id')
+            this.#draggingEntitiesOffset.set(entityId, { offsetX, offsetY })
+        }
+    }
+
+    #dragEnd(event) {
+        const draggingEntities = this.#canvasEl.querySelectorAll('.entity.dragging')
+
+        draggingEntities.forEach(entityEl => {
+            entityEl.classList.remove('dragging')
+        })
+    }
+
+    #drag(event) {
+        const draggingEntities = this.#canvasEl.querySelectorAll('.entity.dragging')
+
+        draggingEntities.forEach(entityEl => {
+            const { x, y } = this.#getPositionOnCanvas(event)
+
+            const { offsetX, offsetY } = this.#draggingEntitiesOffset.get(entityEl.getAttribute('data-id'))
+
+            entityEl.style.left = x - offsetX + 'px'
+            entityEl.style.top = y - offsetY + 'px'
+        })
+    }
+
+    #getPositionOnCanvas(e) {
+        const rect = this.#canvasEl.getBoundingClientRect()
+        const x = e.pageX - rect.left
+        const y = e.pageY - rect.top
+
+        return { x, y }
     }
 
     #createTools() {
@@ -113,7 +193,7 @@ class BoardView extends EventTarget  {
             div(toolEl).classList.add('icon')
         })
 
-        toolEl.addEventListener('click', e => {
+        toolEl.addEventListener('click', _ => {
             this.#handleToolSelection(toolEl)
         })
     }
@@ -121,7 +201,7 @@ class BoardView extends EventTarget  {
     #setColorToAllShapeTools(color) {
         const shapeTools = this.#toolsEl.querySelectorAll('[data-tool="shape"]')
         shapeTools.forEach(toolEl => {
-            
+
             toolEl.setAttribute('data-color', color)
 
             const toolIcon = toolEl.querySelector('.icon')
@@ -140,13 +220,13 @@ class BoardView extends EventTarget  {
             toolEl.setAttribute('data-tool', 'emoji')
             toolEl.setAttribute('data-emoji', emoji)
 
-            div(toolEl, iconEl => { 
+            div(toolEl, iconEl => {
                 iconEl.classList.add('icon')
                 iconEl.innerText = emoji
             })
         })
 
-        toolEl.addEventListener('click', e => {
+        toolEl.addEventListener('click', _ => {
             this.#handleToolSelection(toolEl)
         })
     }
@@ -154,7 +234,7 @@ class BoardView extends EventTarget  {
     #handleToolSelection(toolEl) {
         const currentSelected = this.#toolsEl.querySelector('.selected')
         if (currentSelected) {
-          currentSelected.classList.remove('selected')
+            currentSelected.classList.remove('selected')
         }
 
         if (currentSelected != toolEl) {
@@ -164,20 +244,6 @@ class BoardView extends EventTarget  {
 
     #getSelectedToolEl() {
         return this.#toolsEl.querySelector('.selected')
-
-        /*
-        if (selectedToolEl) {
-            const toolType = selectedToolEl.getAttribute('data-tool')
-
-            switch (toolType) {
-                case 'shape':
-                    return { 
-                        type: 'shape',
-                        shape: selectedToolEl.getAttribute('data-shape')
-                    }
-            }
-        }
-        */
     }
 }
 

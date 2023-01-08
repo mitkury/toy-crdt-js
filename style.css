@@ -252,6 +252,16 @@
     height: 100px;
 }
 
+.canvas .entity.selected::after {
+    content: "";
+    position: absolute;
+    top: -5px;
+    left: -5px;
+    width: calc(100% + 10px);
+    height: calc(100% + 10px);
+    border: 1px solid #000;
+}
+
 .canvas .entity .shape[data-shape="triangle"] {
     position: absolute;
     width: 0;
