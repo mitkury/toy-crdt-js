@@ -1,4 +1,5 @@
 import { element, div, span, nodeHasDataId } from "/js/utils.js"
+import { getRandomEmoji } from "/js/emojis.js"
 
 class BoardView extends EventTarget {
     #peerId
@@ -187,7 +188,7 @@ class BoardView extends EventTarget {
         this.#createShapeTool('circle')
         this.#createShapeTool('rectangle')
         this.#createShapeTool('triangle')
-        this.#createEmojiTool('🙈')
+        this.#createEmojiTool()
     }
 
     #createShapeTool(type) {
@@ -220,19 +221,21 @@ class BoardView extends EventTarget {
         })
     }
 
-    #createEmojiTool(emoji) {
+    #createEmojiTool() {
         const toolEl = div(this.#toolsEl, toolEl => {
             toolEl.classList.add('tool')
             toolEl.setAttribute('data-tool', 'emoji')
-            toolEl.setAttribute('data-emoji', emoji)
+
+            toolEl.setAttribute('data-emoji', getRandomEmoji())
 
             div(toolEl, iconEl => {
                 iconEl.classList.add('icon')
-                iconEl.innerText = emoji
+                iconEl.innerText = '🙈'
             })
         })
 
         toolEl.addEventListener('click', _ => {
+            toolEl.setAttribute('data-emoji', getRandomEmoji())
             this.#handleToolSelection(toolEl)
         })
     }
