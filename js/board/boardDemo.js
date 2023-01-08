@@ -1,9 +1,10 @@
 import { element, div, span, nodeHasDataId } from "/js/utils.js"
 import { getRandomEmoji } from "/js/emojis.js"
+import { ReplicatedProperties } from "/js/crdt/properties/replicatedProperties.js"
 
 class BoardView extends EventTarget {
     #peerId
-    #properties
+    #properties = new ReplicatedProperties()
     #canvasEl
     #toolsEl
     #entities = new Map()
@@ -16,6 +17,8 @@ class BoardView extends EventTarget {
         this.#peerId = peerId
 
         this.#entityCount = 0
+
+        this.#properties.subscribeToChanges(this.#handlePropertyChange.bind(this))
 
         const amountOfCardsInParent = parentElement.getElementsByClassName('demo-card').length;
         const containerEl = div(parentElement, demoCardEl => {
@@ -37,14 +40,45 @@ class BoardView extends EventTarget {
             canvasEl.addEventListener('click', event => {
                 const selectedToolEl = this.#getSelectedToolEl()
 
-                const { x, y } = this.#getPositionOnCanvas(event)
-
                 if (selectedToolEl) {
-
+                    const { x, y } = this.#getPositionOnCanvas(event)
                     const tool = selectedToolEl.getAttribute('data-tool')
-                    const entityId = this.#peerId + '-' + this.#entityCount
+                    const entityId = this.#peerId + this.#entityCount
                     this.#entityCount++
 
+                    this.#properties.setPending(entityId, 'exists', true)
+                    
+                    const size = {
+                        width: 50,
+                        height: 50
+                    }
+                    this.#properties.setPending(entityId, 'size', size)
+
+                    const position = {
+                        x: x - size.width / 2,
+                        y: y - size.height / 2
+                    }
+                    this.#properties.setPending(entityId, 'position', position)
+
+                    switch (tool) {
+                        case 'shape':
+                            const shape = selectedToolEl.getAttribute('data-shape')
+                            const color = selectedToolEl.getAttribute('data-color')
+                            this.#properties.setPending(entityId, 'shape', shape)
+                            this.#properties.setPending(entityId, 'color', color)
+                            break
+
+                        case 'emoji':
+                            const emoji = selectedToolEl.getAttribute('data-emoji')
+                            this.#properties.setPending(entityId, 'emoji', emoji)
+                            break
+                    }
+
+                    this.#properties.applyPending()
+
+                    selectedToolEl.classList.remove('selected')
+                    
+                    /*
                     const entityEl = div(canvasEl, entityEl => {
                         entityEl.classList.add('entity')
                         entityEl.setAttribute('data-id', entityId)
@@ -110,6 +144,8 @@ class BoardView extends EventTarget {
                     })
 
                     entityEl.addEventListener('mousedown', this.#dragStart.bind(this))
+                    */
+                    
                 }
             })
         })
@@ -142,6 +178,126 @@ class BoardView extends EventTarget {
         this.#setColorToAllShapeTools(titleBackgroundColor)
     }
 
+    #handlePropertyChange(operation) { 
+        const entityId = operation.getEntityId()
+        const propertyName = operation.getPropertyName()
+        const propertyValue = operation.getValue()
+
+        switch (propertyName) {
+            case 'exists':
+                this.#createOrDeleteEntity(entityId, propertyValue)
+                break
+            case 'position':
+                this.#setEntityPosition(entityId, propertyValue)
+                break
+
+            case 'size':
+                this.#setEntitySize(entityId, propertyValue)
+                break
+
+            case 'shape':
+                this.#setEntityShape(entityId, propertyValue)
+                break
+
+            case 'color':
+                this.#setEntityColor(entityId, propertyValue)
+                break
+
+            case 'emoji':
+                this.#setEntityEmoji(entityId, propertyValue)
+                break
+        }  
+    }
+
+    #createOrDeleteEntity(entityId, exists) {
+        if (exists) {
+            const canvasEl = this.#canvasEl
+
+            div(canvasEl, entityEl => {
+                entityEl.classList.add('entity')
+                entityEl.setAttribute('data-id', entityId)
+
+                this.#entities.set(entityId, entityEl)
+                entityEl.addEventListener('click', _ => {
+                    const isSelected = entityEl.classList.contains('selected')
+
+                    if (isSelected) {
+                        entityEl.classList.remove('selected')
+                    } else {
+                        const selectedEntities = canvasEl.querySelectorAll('.entity.selected')
+                        selectedEntities.forEach(entityEl => {
+                            entityEl.classList.remove('selected')
+                        })
+
+                        entityEl.classList.add('selected')
+                    }
+                })
+
+                entityEl.addEventListener('mousedown', this.#dragStart.bind(this))
+            })
+        } else {
+            const entityEl = this.#entities.get(entityId)
+            entityEl.remove()
+            this.#entities.delete(entityId)
+        }
+    }
+
+    #setEntityPosition(entityId, position) {
+        const entityEl = this.#entities.get(entityId)
+        entityEl.style.left = position.x + 'px'
+        entityEl.style.top = position.y + 'px'
+    }
+
+    #setEntitySize(entityId, size) {
+        const entityEl = this.#entities.get(entityId)
+        entityEl.style.width = size.width + 'px'
+        entityEl.style.height = size.height + 'px'
+    }
+
+    #setEntityShape(entityId, shape) {
+        const entityEl = this.#entities.get(entityId)
+
+        entityEl.innerHTML = ''
+        
+        div(entityEl, shapeEl => {
+            shapeEl.classList.add('shape')
+            shapeEl.setAttribute('data-shape', shape)
+            
+            const width = entityEl.clientWidth
+            const height = entityEl.clientHeight
+
+            if (shape == 'triangle') {
+                shapeEl.style.borderWidth = `${width / 2}px 0px ${height / 2}px ${width}px`
+            }
+        })
+    }
+
+    #setEntityColor(entityId, color) {
+        const entityEl = this.#entities.get(entityId)
+
+        const shapeEl = entityEl.querySelector('.shape')
+        const shape = shapeEl.getAttribute('data-shape')
+
+        if (shape == 'triangle') {
+            shapeEl.style.borderColor = `transparent transparent transparent ${color}`
+        } else {
+            shapeEl.style.backgroundColor = color
+        }
+    }
+
+    #setEntityEmoji(entityId, emoji) {
+        const entityEl = this.#entities.get(entityId)
+
+        entityEl.innerHTML = ''
+        
+        div(entityEl, emojiEl => {
+            emojiEl.classList.add('emoji')
+            emojiEl.innerText = emoji
+            const height = entityEl.clientHeight
+            emojiEl.style.fontSize = height + 'px'
+        })
+    }
+
     #dragStart(event) {               
         const entityEl = event.target.closest('.entity')
         if (entityEl) {
@@ -171,8 +327,13 @@ class BoardView extends EventTarget {
 
             const { offsetX, offsetY } = this.#draggingEntitiesOffset.get(entityEl.getAttribute('data-id'))
 
-            entityEl.style.left = x - offsetX + 'px'
-            entityEl.style.top = y - offsetY + 'px'
+            const position = {
+                x: x - offsetX,
+                y: y - offsetY
+            }
+
+            const entityId = entityEl.getAttribute('data-id')
+            this.#properties.set(entityId, 'position', position)            
         })
     }
 
@@ -256,19 +417,87 @@ class BoardView extends EventTarget {
     }
 }
 
+class SyncButton {
+    #containerEl
+    #counterViews = []
+
+    constructor(parentElement) {
+        this.#containerEl = div(parentElement, wrapperEl => {
+            wrapperEl.classList.add('sync-button-wrapper')
+            
+            div(wrapperEl, buttonEl => {
+                buttonEl.classList.add('button')
+                buttonEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 101.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059-4.035.75.75 0 00-.53-.918z" clip-rule="evenodd" /></svg> Sync`
+                buttonEl.addEventListener('click', e => { 
+                    this.#sync()
+                })
+            })
+
+            div(wrapperEl).classList.add('connection')
+        })
+
+        this.#disableOrEnableButton()
+    }
+
+    addCounterView(counterView) {
+        this.#counterViews.push(counterView)
+
+        counterView.addEventListener('change', e => {
+            this.#disableOrEnableButton()
+        })
+    }
+
+    #sync() {
+        for (let i = 0; i < this.#counterViews.length; i++) {
+            for (let j = 0; j < this.#counterViews.length; j++) {
+                if (i === j) continue
+
+                this.#counterViews[i].merge(this.#counterViews[j])
+            }
+        }
+
+        this.#disableOrEnableButton()
+    }
+
+    #disableOrEnableButton() {
+        if (this.#allCounterViewsHaveSameState()) {
+            this.#containerEl.classList.add('disabled')
+        } else {
+            this.#containerEl.classList.remove('disabled')
+        }
+    }
+
+    #allCounterViewsHaveSameState() {
+        for (let i = 1; i < this.#counterViews.length; i++) {
+            for (let j = 0; j < this.#counterViews.length; j++) {
+                if (i === j) continue
+
+                if (!this.#counterViews[i].equals(this.#counterViews[j])) {
+                    return false
+                }
+            }
+        }
+
+        return true
+    }
+}
+
 export class BoardDemo {
     constructor(demosContainerEl) {
-        const boardView = new BoardView(demosContainerEl, 'A')
-
-        /*
+        const boardView1 = new BoardView(demosContainerEl, 'A')
 
         const syncButton1 = new SyncButton(demosContainerEl)
 
-        const gCounterView2 = new GCounterView(demosContainerEl, 'B')
+        const boardView2 = new BoardView(demosContainerEl, 'B')
+
+        syncButton1.addCounterView(boardView1)
+        syncButton1.addCounterView(boardView2)
+
+        /*
 
         const syncButton2 = new SyncButton(demosContainerEl)
 
-        const gCounterView3 = new GCounterView(demosContainerEl, 'C')
+        const boardView3 = new GCounterView(demosContainerEl, 'C')
 
         syncButton1.addCounterView(gCounterView1)
         syncButton1.addCounterView(gCounterView2)

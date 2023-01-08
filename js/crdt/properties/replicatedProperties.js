@@ -5,19 +5,55 @@ export class ReplicatedProperties {
 
     id = null
     counter = 0
-    // Here are all the blocks that were ever created.
-    // The synonym for 'block' is 'node'. But we call it a block because
-    // we use the term 'node' for the DOM nodes.
-    targets = {}
+    entities = {}
     // Here are all the operations that were ever executed.
-    // Operations are responsible for creating and modifying blocks.
+    // Operations are responsible for setting properties.
     operations = {}
+
+    pendingOperations = []
+
+    #eventListeners = []
 
     /**
      * @param {OpId} id 
      */
     constructor(id) {
         this.id = id
+    }
+
+    get(entityId, propertyName) {
+        if (!this.entities[entityId]) {
+            return null
+        }
+
+        return this.entities[entityId][0]
+    }
+
+    set(entityId, propertyName, value) {
+        this.setPending(entityId, propertyName, value)
+        this.applyPending()
+    }
+
+    setPending(entityId, propertyName, value) { 
+        const opId = this.getNewOperationId()
+        const op = new SetPropertyOperation(opId, entityId, propertyName, value)
+        this.pendingOperations.push(op)
+    }
+
+    applyPending() {
+        this.executeOperations(this.pendingOperations)
+        this.pendingOperations = []
+    }
+
+    subscribeToChanges(callback) {
+        this.#eventListeners.push(callback)
+    }
+
+    #dispatchChange(operation) {
+        for (var i = 0; i < this.#eventListeners.length; i++) {
+            const listener = this.#eventListeners[i]
+            listener(operation)
+        }
     }
 
     /**
@@ -49,7 +85,7 @@ export class ReplicatedProperties {
      * @param {OpId[]} ops 
      * @param {*} callback 
      */
-     executeOperations(ops, callback) {
+     executeOperations(ops) {
         if (!ops || ops.length == 0) {
             return
         }
@@ -57,11 +93,11 @@ export class ReplicatedProperties {
         for (var opi = 0; opi < ops.length; opi++) {
             const op = ops[opi]
 
-            this.executeOperation(op, callback)
+            this.executeOperation(op)
         }
     }
 
-    executeOperation(op, callback) {
+    executeOperation(op) {
         if (this.hasOperation(op.getId())) {
             return
         }
@@ -77,12 +113,12 @@ export class ReplicatedProperties {
         }
 
         if (op instanceof SetPropertyOperation) {
-            const targetId = op.getTargetId()
+            const targetId = op.getEntityId()
             const propName = op.getPropertyName()
-            const propValue = op.getPropertyValue()
+            const propValue = op.getValue()
             const opId = op.getId()
 
-            let target = this.targets[targetId]
+            let target = this.entities[targetId]
             if (!target) {
                 target = {}  
             }
@@ -91,9 +127,9 @@ export class ReplicatedProperties {
 
             if (!propPair || opId.isGreaterThan(propPair[1])) {
                 target[propName] = [propValue, opId]
-                this.targets[targetId] = target
+                this.entities[targetId] = target
 
-                callback && callback(op)
+                this.#dispatchChange(op)
             }
 
         } else {

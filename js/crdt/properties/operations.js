@@ -1,7 +1,7 @@
 export class SetPropertyOperation {
     #opId
-    #targetId
-    #propName
+    #entityId
+    #propertyName
     #value
 
     /**
@@ -14,8 +14,8 @@ export class SetPropertyOperation {
     /**
      * @returns {OpId}
      */
-    getTargetId() {
-        return this.#targetId
+    getEntityId() {
+        return this.#entityId
     }
 
     /**
@@ -25,8 +25,8 @@ export class SetPropertyOperation {
         return this.#value
     }
 
-    getPropName() {
-        return this.#propName
+    getPropertyName() {
+        return this.#propertyName
     }
 
     static set(opId, targetId, propName, value) {
@@ -45,8 +45,8 @@ export class SetPropertyOperation {
      */
     constructor(opId, targetId, propName, value) {
         this.#opId = opId
-        this.#targetId = targetId
-        this.#propName = propName
+        this.#entityId = targetId
+        this.#propertyName = propName
         this.#value = value
     }
 }
