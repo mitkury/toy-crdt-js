@@ -49,6 +49,11 @@ export class ReplicatedProperties {
         this.#eventListeners.push(callback)
     }
 
+    merge(other) {
+        const otherOps = other.getOperations()
+        this.executeOperations(otherOps)
+    }
+
     #dispatchChange(operation) {
         for (var i = 0; i < this.#eventListeners.length; i++) {
             const listener = this.#eventListeners[i]

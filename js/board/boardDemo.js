@@ -4,7 +4,7 @@ import { ReplicatedProperties } from "/js/crdt/properties/replicatedProperties.j
 
 class BoardView extends EventTarget {
     #peerId
-    #properties = new ReplicatedProperties()
+    #properties
     #canvasEl
     #toolsEl
     #entities = new Map()
@@ -15,6 +15,7 @@ class BoardView extends EventTarget {
         super()
 
         this.#peerId = peerId
+        this.#properties = new ReplicatedProperties(peerId)
 
         this.#entityCount = 0
 
@@ -163,8 +164,7 @@ class BoardView extends EventTarget {
                 if (event.key == 'Backspace' || event.key == 'Delete') {
                     selectedEntities.forEach(entityEl => {
                         const entityId = entityEl.getAttribute('data-id')
-                        this.#entities.delete(entityId)
-                        entityEl.remove()
+                        this.#properties.set(entityId, 'exists', false)
                     })
                 }
             }
@@ -176,6 +176,14 @@ class BoardView extends EventTarget {
         const titleBackgroundColor = window.getComputedStyle(titleEl).backgroundColor
         // And use it as the default color for the shape tools
         this.#setColorToAllShapeTools(titleBackgroundColor)
+    }
+
+    equals() {
+        return false
+    }
+
+    merge(other) {
+        this.#properties.merge(other.#properties)
     }
 
     #handlePropertyChange(operation) { 
@@ -206,7 +214,13 @@ class BoardView extends EventTarget {
             case 'emoji':
                 this.#setEntityEmoji(entityId, propertyValue)
                 break
-        }  
+        }
+        
+        this.#dispatchChange(operation)
+    }
+
+    #dispatchChange(operation) {
+        this.dispatchEvent(new CustomEvent('change', { detail: operation }));
     }
 
     #createOrDeleteEntity(entityId, exists) {
@@ -244,18 +258,29 @@ class BoardView extends EventTarget {
 
     #setEntityPosition(entityId, position) {
         const entityEl = this.#entities.get(entityId)
+        if (!entityEl) {
+            return
+        }
+
         entityEl.style.left = position.x + 'px'
         entityEl.style.top = position.y + 'px'
     }
 
     #setEntitySize(entityId, size) {
         const entityEl = this.#entities.get(entityId)
+        if (!entityEl) {
+            return
+        }
+
         entityEl.style.width = size.width + 'px'
         entityEl.style.height = size.height + 'px'
     }
 
     #setEntityShape(entityId, shape) {
         const entityEl = this.#entities.get(entityId)
+        if (!entityEl) {
+            return
+        }
 
         entityEl.innerHTML = ''
         
@@ -274,6 +299,9 @@ class BoardView extends EventTarget {
 
     #setEntityColor(entityId, color) {
         const entityEl = this.#entities.get(entityId)
+        if (!entityEl) {
+            return
+        }
 
         const shapeEl = entityEl.querySelector('.shape')
         const shape = shapeEl.getAttribute('data-shape')
@@ -287,6 +315,9 @@ class BoardView extends EventTarget {
 
     #setEntityEmoji(entityId, emoji) {
         const entityEl = this.#entities.get(entityId)
+        if (!entityEl) {
+            return
+        }
 
         entityEl.innerHTML = ''
         
@@ -419,7 +450,7 @@ class BoardView extends EventTarget {
 
 class SyncButton {
     #containerEl
-    #counterViews = []
+    #views = []
 
     constructor(parentElement) {
         this.#containerEl = div(parentElement, wrapperEl => {
@@ -439,20 +470,20 @@ class SyncButton {
         this.#disableOrEnableButton()
     }
 
-    addCounterView(counterView) {
-        this.#counterViews.push(counterView)
+    addCounterView(view) {
+        this.#views.push(view)
 
-        counterView.addEventListener('change', e => {
+        view.addEventListener('change', e => {
             this.#disableOrEnableButton()
         })
     }
 
     #sync() {
-        for (let i = 0; i < this.#counterViews.length; i++) {
-            for (let j = 0; j < this.#counterViews.length; j++) {
+        for (let i = 0; i < this.#views.length; i++) {
+            for (let j = 0; j < this.#views.length; j++) {
                 if (i === j) continue
 
-                this.#counterViews[i].merge(this.#counterViews[j])
+                this.#views[i].merge(this.#views[j])
             }
         }
 
@@ -468,11 +499,11 @@ class SyncButton {
     }
 
     #allCounterViewsHaveSameState() {
-        for (let i = 1; i < this.#counterViews.length; i++) {
-            for (let j = 0; j < this.#counterViews.length; j++) {
+        for (let i = 1; i < this.#views.length; i++) {
+            for (let j = 0; j < this.#views.length; j++) {
                 if (i === j) continue
 
-                if (!this.#counterViews[i].equals(this.#counterViews[j])) {
+                if (!this.#views[i].equals(this.#views[j])) {
                     return false
                 }
             }
