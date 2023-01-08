@@ -251,6 +251,10 @@ class BoardView extends EventTarget {
             })
         } else {
             const entityEl = this.#entities.get(entityId)
+            if (!entityEl) {
+                return
+            }
+
             entityEl.remove()
             this.#entities.delete(entityId)
         }
