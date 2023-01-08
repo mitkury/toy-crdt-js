@@ -21,9 +21,11 @@ class BoardView extends EventTarget {
             demoCardEl.classList.add('demo-card')
             demoCardEl.classList.add('board')
         })
-        containerEl.setAttribute('data-card-no', amountOfCardsInParent + 1)
 
-        div(containerEl, el => {
+        const cardNo = amountOfCardsInParent + 1
+        containerEl.setAttribute('data-card-no', cardNo)
+
+        const titleEl = div(containerEl, el => {
             el.classList.add('title')
             el.innerText = 'User ' + this.#peerId
         })
@@ -132,7 +134,11 @@ class BoardView extends EventTarget {
         })
 
         this.#createTools()
-        this.#setColorToAllShapeTools('#1E4FFF')
+
+        // Get a computed background color of the title element from CSS
+        const titleBackgroundColor = window.getComputedStyle(titleEl).backgroundColor
+        // And use it as the default color for the shape tools
+        this.#setColorToAllShapeTools(titleBackgroundColor)
     }
 
     #dragStart(event) {               
