@@ -144,5 +144,11 @@ export class ReplicatedProperties {
         this.operations[op.getId()] = op
     }
 
+    clear() {
+        this.entities = {}
+        this.operations = {}
+        this.pendingOperations = []
+    }
+
 
 }

@@ -5,6 +5,7 @@ import { ReplicatedProperties } from "/js/crdt/properties/replicatedProperties.j
 class BoardView extends EventTarget {
     #peerId
     #properties
+    #tempProperties
     #canvasEl
     #toolsEl
     #entities = new Map()
@@ -16,10 +17,12 @@ class BoardView extends EventTarget {
 
         this.#peerId = peerId
         this.#properties = new ReplicatedProperties(peerId)
+        this.#tempProperties = new ReplicatedProperties(peerId)
 
         this.#entityCount = 0
 
         this.#properties.subscribeToChanges(this.#handlePropertyChange.bind(this))
+        this.#tempProperties.subscribeToChanges(this.#handlePropertyChange.bind(this))
 
         const amountOfCardsInParent = parentElement.getElementsByClassName('demo-card').length;
         const containerEl = div(parentElement, demoCardEl => {
@@ -183,7 +186,12 @@ class BoardView extends EventTarget {
     }
 
     merge(other) {
+        this.#tempProperties.merge(other.#tempProperties)
         this.#properties.merge(other.#properties)
+    }
+
+    clearTempProperties() {
+        this.#tempProperties.clear()
     }
 
     #handlePropertyChange(operation) { 
@@ -349,26 +357,34 @@ class BoardView extends EventTarget {
     #dragEnd(event) {
         const draggingEntities = this.#canvasEl.querySelectorAll('.entity.dragging')
 
+        const { x, y } = this.#getPositionOnCanvas(event)
+        this.#setPositionOfDraggingEntities(x, y, false)
+
         draggingEntities.forEach(entityEl => {
             entityEl.classList.remove('dragging')
         })
     }
 
     #drag(event) {
+        const { x, y } = this.#getPositionOnCanvas(event)
+        this.#setPositionOfDraggingEntities(x, y, true)
+    }
+
+    #setPositionOfDraggingEntities(cursorX, cursorY, isTemp) { 
         const draggingEntities = this.#canvasEl.querySelectorAll('.entity.dragging')
 
         draggingEntities.forEach(entityEl => {
-            const { x, y } = this.#getPositionOnCanvas(event)
-
             const { offsetX, offsetY } = this.#draggingEntitiesOffset.get(entityEl.getAttribute('data-id'))
 
             const position = {
-                x: x - offsetX,
-                y: y - offsetY
+                x: cursorX - offsetX,
+                y: cursorY - offsetY
             }
 
             const entityId = entityEl.getAttribute('data-id')
-            this.#properties.set(entityId, 'position', position)            
+            
+            let targetProperties = isTemp ? this.#tempProperties : this.#properties
+            targetProperties.set(entityId, 'position', position)            
         })
     }
 
@@ -452,11 +468,14 @@ class BoardView extends EventTarget {
     }
 }
 
-class SyncButton {
+class SyncRealtimeButton {
     #containerEl
     #views = []
+    #on
 
     constructor(parentElement) {
+        this.#on = true
+
         this.#containerEl = div(parentElement, wrapperEl => {
             wrapperEl.classList.add('sync-button-wrapper')
             
@@ -464,22 +483,30 @@ class SyncButton {
                 buttonEl.classList.add('button')
                 buttonEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 101.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059-4.035.75.75 0 00-.53-.918z" clip-rule="evenodd" /></svg> Sync`
                 buttonEl.addEventListener('click', e => { 
-                    this.#sync()
+                    if (this.#on) {
+                        this.#disableSync()
+                    } else {
+                        this.#enableSync()
+                    }
                 })
             })
 
             div(wrapperEl).classList.add('connection')
         })
 
-        this.#disableOrEnableButton()
+        requestAnimationFrame(this.#tick.bind(this));
     }
 
-    addCounterView(view) {
+    addView(view) {
         this.#views.push(view)
+    }
 
-        view.addEventListener('change', e => {
-            this.#disableOrEnableButton()
-        })
+    #tick() {
+        if (this.#on) { 
+            this.#sync();
+        }
+
+        requestAnimationFrame(this.#tick.bind(this));
     }
 
     #sync() {
@@ -491,18 +518,22 @@ class SyncButton {
             }
         }
 
-        this.#disableOrEnableButton()
-    }
-
-    #disableOrEnableButton() {
-        if (this.#allCounterViewsHaveSameState()) {
-            this.#containerEl.classList.add('disabled')
-        } else {
-            this.#containerEl.classList.remove('disabled')
+        for (let i = 0; i < this.#views.length; i++) {
+            this.#views[i].clearTempProperties()
         }
     }
 
-    #allCounterViewsHaveSameState() {
+    #disableSync() {
+        this.#on = false
+        this.#containerEl.classList.add('disabled')
+    }
+
+    #enableSync() {
+        this.#on = true
+        this.#containerEl.classList.remove('disabled')
+    }
+
+    #allViewsHaveSameState() {
         for (let i = 1; i < this.#views.length; i++) {
             for (let j = 0; j < this.#views.length; j++) {
                 if (i === j) continue
@@ -521,12 +552,12 @@ export class BoardDemo {
     constructor(demosContainerEl) {
         const boardView1 = new BoardView(demosContainerEl, 'A')
 
-        const syncButton1 = new SyncButton(demosContainerEl)
+        const syncButton1 = new SyncRealtimeButton(demosContainerEl)
 
         const boardView2 = new BoardView(demosContainerEl, 'B')
 
-        syncButton1.addCounterView(boardView1)
-        syncButton1.addCounterView(boardView2)
+        syncButton1.addView(boardView1)
+        syncButton1.addView(boardView2)
 
         /*
 
