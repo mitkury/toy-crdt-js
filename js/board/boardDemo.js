@@ -2,6 +2,7 @@ import { element, div, span, nodeHasDataId } from "/js/utils.js"
 import { getRandomEmoji } from "/js/emojis.js"
 import { ReplicatedProperties } from "/js/crdt/properties/replicatedProperties.js"
 import { RotationHandle } from '/js/board/rotationHandle.js'
+import { SizeHandle } from '/js/board/sizeHandle.js'
 
 class BoardView extends EventTarget {
     #peerId
@@ -82,75 +83,6 @@ class BoardView extends EventTarget {
                     this.#properties.applyPending()
 
                     selectedToolEl.classList.remove('selected')
-
-                    /*
-                    const entityEl = div(canvasEl, entityEl => {
-                        entityEl.classList.add('entity')
-                        entityEl.setAttribute('data-id', entityId)
-
-                        const width = 50
-                        const height = 50
-
-                        entityEl.style.width = width + 'px'
-                        entityEl.style.height = height + 'px'
-
-                        entityEl.style.left = x - width / 2 + 'px'
-                        entityEl.style.top = y - height / 2 + 'px'
-
-                        switch (tool) {
-                            case 'shape':
-                                const shape = selectedToolEl.getAttribute('data-shape')
-                                const color = selectedToolEl.getAttribute('data-color')
-
-                                entityEl = div(entityEl, shapeEl => {
-                                    shapeEl.classList.add('shape')
-                                    shapeEl.setAttribute('data-shape', shape)
-
-                                    if (shape == 'triangle') {
-                                        shapeEl.style.borderWidth = `${width / 2}px 0px ${height / 2}px ${width}px`
-                                        shapeEl.style.borderColor = `transparent transparent transparent ${color}`
-                                    } else {
-                                        shapeEl.style.backgroundColor = color
-                                    }
-
-                                })
-
-                                break
-                            case 'emoji':
-                                const emoji = selectedToolEl.getAttribute('data-emoji')
-
-                                entityEl = div(entityEl, emojiEl => {
-                                    emojiEl.classList.add('emoji')
-                                    emojiEl.innerText = emoji
-                                    emojiEl.style.fontSize = height + 'px'
-                                })
-
-                                break
-                        }
-                    })
-
-                    selectedToolEl.classList.remove('selected')
-
-                    this.#entities.set(entityId, entityEl)
-
-                    entityEl.addEventListener('click', _ => {
-                        const isSelected = entityEl.classList.contains('selected')
-
-                        if (isSelected) {
-                            entityEl.classList.remove('selected')
-                        } else {
-                            const selectedEntities = canvasEl.querySelectorAll('.entity.selected')
-                            selectedEntities.forEach(entityEl => {
-                                entityEl.classList.remove('selected')
-                            })
-
-                            entityEl.classList.add('selected')
-                        }
-                    })
-
-                    entityEl.addEventListener('mousedown', this.#dragStart.bind(this))
-                    */
-
                 }
             })
         })
@@ -502,6 +434,7 @@ class BoardView extends EventTarget {
     }
 
     #activeRotationHandle = null
+    #activeSizeHandle = null
 
     #setupGizmoOnEntity(entityEl, doSetup) {
         if (doSetup) {
@@ -525,11 +458,26 @@ class BoardView extends EventTarget {
                 this.#properties.set(entityId, 'angle', angle)
             })
 
+            const sizeHandle = new SizeHandle(entityEl, entityEl)
+            sizeHandle.addEventListener('size', event => {
+                const { width, height } = event.detail
+                this.#tempProperties.set(entityId, 'size', { width, height })
+            })
+            sizeHandle.addEventListener('finalSize', event => {
+                const { width, height } = event.detail
+                this.#properties.set(entityId, 'size', { width, height })
+            })
+
             this.#activeRotationHandle = rotationHandle
+            this.#activeSizeHandle = sizeHandle
         } else {
             if (this.#activeRotationHandle) {
                 this.#activeRotationHandle.remove()
                 this.#activeRotationHandle = null
+            }
+            if (this.#activeSizeHandle) {
+                this.#activeSizeHandle.remove()
+                this.#activeSizeHandle = null
             }
 
             return
