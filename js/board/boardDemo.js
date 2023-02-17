@@ -250,6 +250,25 @@ class BoardView extends EventTarget {
 
         entityEl.style.width = size.width + 'px'
         entityEl.style.height = size.height + 'px'
+
+        // Check if the entity is a triangle and update its border width
+        const shapeEl = entityEl.querySelector('.shape')
+        if (shapeEl) {
+            const shapeType = shapeEl.getAttribute('data-shape')
+            if (shapeType == 'triangle') {
+                const width = entityEl.clientWidth
+                const height = entityEl.clientHeight
+                shapeEl.style.borderWidth = `${width / 2}px 0px ${height / 2}px ${width}px`
+            }
+        }
+
+        // If the entity is a smile then change its font size
+        const emojiEl = entityEl.querySelector('.emoji')
+        if (emojiEl) {
+            const fontSize = Math.min(size.width, size.height) * 1
+            emojiEl.style.fontSize = fontSize + 'px'
+        }
+
     }
 
     #setEntityShape(entityId, shape) {
@@ -302,8 +321,8 @@ class BoardView extends EventTarget {
             emojiEl.classList.add('emoji')
             emojiEl.classList.add('object')
             emojiEl.innerText = emoji
-            const height = entityEl.clientHeight
-            emojiEl.style.fontSize = height + 'px'
+            const fontSize = Math.min(entityEl.clientWidth, entityEl.clientHeight) * 1
+            emojiEl.style.fontSize = fontSize + 'px'
         })
     }
 

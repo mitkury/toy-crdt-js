@@ -304,3 +304,21 @@
     cursor: ew-resize;
     z-index: 999;
 }
+
+.canvas .entity .scale-handle {
+    position: absolute;
+    bottom: -25px;
+    right: -25px;
+}
+
+.canvas .entity .scale-handle:after {
+    display: block;
+    content: "";
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    right: -7px;
+    background-color: black;
+    cursor: ew-resize;
+    z-index: 999;
+}
