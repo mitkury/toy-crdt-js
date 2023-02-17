@@ -285,3 +285,22 @@
     border-radius: 50%;
     background-color: black;
 }
+
+.canvas .entity .rotation-handle {
+    position: absolute;
+    top: -25px;
+    right: 50%;
+}
+
+.canvas .entity .rotation-handle:after {
+    display: block;
+    content: "";
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    right: -7px;
+    border-radius: 50%;
+    background-color: black;
+    cursor: ew-resize;
+    z-index: 999;
+}

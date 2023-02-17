@@ -1,6 +1,7 @@
 import { element, div, span, nodeHasDataId } from "/js/utils.js"
 import { getRandomEmoji } from "/js/emojis.js"
 import { ReplicatedProperties } from "/js/crdt/properties/replicatedProperties.js"
+import { RotationHandle } from '/js/board/rotationHandle.js'
 
 class BoardView extends EventTarget {
     #peerId
@@ -51,7 +52,7 @@ class BoardView extends EventTarget {
                     this.#entityCount++
 
                     this.#properties.setPending(entityId, 'exists', true)
-                    
+
                     const size = {
                         width: 50,
                         height: 50
@@ -81,7 +82,7 @@ class BoardView extends EventTarget {
                     this.#properties.applyPending()
 
                     selectedToolEl.classList.remove('selected')
-                    
+
                     /*
                     const entityEl = div(canvasEl, entityEl => {
                         entityEl.classList.add('entity')
@@ -149,7 +150,7 @@ class BoardView extends EventTarget {
 
                     entityEl.addEventListener('mousedown', this.#dragStart.bind(this))
                     */
-                    
+
                 }
             })
         })
@@ -194,7 +195,7 @@ class BoardView extends EventTarget {
         this.#tempProperties.clear()
     }
 
-    #handlePropertyChange(operation) { 
+    #handlePropertyChange(operation) {
         const entityId = operation.getEntityId()
         const propertyName = operation.getPropertyName()
         const propertyValue = operation.getValue()
@@ -203,8 +204,13 @@ class BoardView extends EventTarget {
             case 'exists':
                 this.#createOrDeleteEntity(entityId, propertyValue)
                 break
+
             case 'position':
                 this.#setEntityPosition(entityId, propertyValue)
+                break
+
+            case 'angle':
+                this.#setEntityAngle(entityId, propertyValue)
                 break
 
             case 'size':
@@ -223,7 +229,7 @@ class BoardView extends EventTarget {
                 this.#setEntityEmoji(entityId, propertyValue)
                 break
         }
-        
+
         this.#dispatchChange(operation)
     }
 
@@ -240,21 +246,8 @@ class BoardView extends EventTarget {
                 entityEl.setAttribute('data-id', entityId)
 
                 this.#entities.set(entityId, entityEl)
-                entityEl.addEventListener('click', _ => {
-                    const isSelected = entityEl.classList.contains('selected')
 
-                    if (isSelected) {
-                        entityEl.classList.remove('selected')
-                    } else {
-                        const selectedEntities = canvasEl.querySelectorAll('.entity.selected')
-                        selectedEntities.forEach(entityEl => {
-                            entityEl.classList.remove('selected')
-                        })
-
-                        entityEl.classList.add('selected')
-                    }
-                })
-
+                entityEl.addEventListener('click', this.#handleEntityClick.bind(this, entityEl))
                 entityEl.addEventListener('mousedown', this.#dragStart.bind(this))
             })
         } else {
@@ -268,6 +261,31 @@ class BoardView extends EventTarget {
         }
     }
 
+    #handleEntityClick(entityEl) {
+        const isSelected = entityEl.classList.contains('selected')
+
+        this.#setSelected(entityEl, !isSelected)
+    }
+
+    #setSelected(entityEl, doSelect) {
+        if (entityEl.classList.contains('selected') == doSelect) {
+            return
+        }
+
+        if (doSelect) {
+            const selectedEntities = this.#canvasEl.querySelectorAll('.entity.selected')
+            selectedEntities.forEach(otherEntityEl => {
+                this.#setSelected(otherEntityEl, false)
+            })
+
+            entityEl.classList.add('selected')
+        } else {
+            entityEl.classList.remove('selected')
+        }
+
+        this.#setupGizmoOnEntity(entityEl, doSelect)
+    }
+
     #setEntityPosition(entityId, position) {
         const entityEl = this.#entities.get(entityId)
         if (!entityEl) {
@@ -276,6 +294,20 @@ class BoardView extends EventTarget {
 
         entityEl.style.left = position.x + 'px'
         entityEl.style.top = position.y + 'px'
+    }
+
+    #setEntityAngle(entityId, angle) {
+        const entityEl = this.#entities.get(entityId)
+        if (!entityEl) {
+            return
+        }
+
+        const objecEl = entityEl.querySelector('.object')
+        if (!objecEl) {
+            return
+        }
+
+        objecEl.style.transform = `rotate(${angle}deg)`
     }
 
     #setEntitySize(entityId, size) {
@@ -295,11 +327,12 @@ class BoardView extends EventTarget {
         }
 
         entityEl.innerHTML = ''
-        
+
         div(entityEl, shapeEl => {
             shapeEl.classList.add('shape')
+            shapeEl.classList.add('object')
             shapeEl.setAttribute('data-shape', shape)
-            
+
             const width = entityEl.clientWidth
             const height = entityEl.clientHeight
 
@@ -332,16 +365,21 @@ class BoardView extends EventTarget {
         }
 
         entityEl.innerHTML = ''
-        
+
         div(entityEl, emojiEl => {
             emojiEl.classList.add('emoji')
+            emojiEl.classList.add('object')
             emojiEl.innerText = emoji
             const height = entityEl.clientHeight
             emojiEl.style.fontSize = height + 'px'
         })
     }
 
-    #dragStart(event) {               
+    #dragStart(event) {
+        if (event.target.closest('.gizmo')) {
+            return
+        }
+
         const entityEl = event.target.closest('.entity')
         if (entityEl) {
             entityEl.classList.add('dragging')
@@ -370,7 +408,7 @@ class BoardView extends EventTarget {
         this.#setPositionOfDraggingEntities(x, y, true)
     }
 
-    #setPositionOfDraggingEntities(cursorX, cursorY, isTemp) { 
+    #setPositionOfDraggingEntities(cursorX, cursorY, isTemp) {
         const draggingEntities = this.#canvasEl.querySelectorAll('.entity.dragging')
 
         draggingEntities.forEach(entityEl => {
@@ -382,9 +420,9 @@ class BoardView extends EventTarget {
             }
 
             const entityId = entityEl.getAttribute('data-id')
-            
+
             let targetProperties = isTemp ? this.#tempProperties : this.#properties
-            targetProperties.set(entityId, 'position', position)            
+            targetProperties.set(entityId, 'position', position)
         })
     }
 
@@ -463,6 +501,41 @@ class BoardView extends EventTarget {
         }
     }
 
+    #activeRotationHandle = null
+
+    #setupGizmoOnEntity(entityEl, doSetup) {
+        if (doSetup) {
+            if (entityEl.querySelector('.rotation-handle')) {
+                return;
+            }
+
+            const entityId = entityEl.getAttribute('data-id')
+
+            // We get the object because we're going to scale and rotate that element 
+            // instead of the parent entity element
+            const objectEl = entityEl.querySelector('.object')
+
+            const rotationHandle = new RotationHandle(entityEl, objectEl)
+            rotationHandle.addEventListener('rotation', event => {
+                const angle = event.detail.angle
+                this.#tempProperties.set(entityId, 'angle', angle)
+            })
+            rotationHandle.addEventListener('finalRotation', event => {
+                const angle = event.detail.angle
+                this.#properties.set(entityId, 'angle', angle)
+            })
+
+            this.#activeRotationHandle = rotationHandle
+        } else {
+            if (this.#activeRotationHandle) {
+                this.#activeRotationHandle.remove()
+                this.#activeRotationHandle = null
+            }
+
+            return
+        }
+    }
+
     #getSelectedToolEl() {
         return this.#toolsEl.querySelector('.selected')
     }
@@ -478,11 +551,11 @@ class SyncRealtimeButton {
 
         this.#containerEl = div(parentElement, wrapperEl => {
             wrapperEl.classList.add('sync-button-wrapper')
-            
+
             div(wrapperEl, buttonEl => {
                 buttonEl.classList.add('button')
                 buttonEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 101.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059-4.035.75.75 0 00-.53-.918z" clip-rule="evenodd" /></svg> Sync`
-                buttonEl.addEventListener('click', e => { 
+                buttonEl.addEventListener('click', e => {
                     if (this.#on) {
                         this.#disableSync()
                     } else {
@@ -502,7 +575,7 @@ class SyncRealtimeButton {
     }
 
     #tick() {
-        if (this.#on) { 
+        if (this.#on) {
             this.#sync();
         }
 
