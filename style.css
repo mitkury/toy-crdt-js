@@ -188,6 +188,7 @@
 .demo-card.board {
     width: 380px;
     background-color: #fff;
+    user-select: none;
 }
 
 .demo-card.board .canvas {
@@ -252,7 +253,12 @@
     height: 100px;
 }
 
-.canvas .entity.selected::after {
+.canvas .entity .rotator {
+    width: 100%;
+    height: 100%;
+}
+
+.canvas .entity.selected .rotator::after {
     content: "";
     position: absolute;
     top: -5px;
@@ -260,6 +266,10 @@
     width: calc(100% + 10px);
     height: calc(100% + 10px);
     border: 1px solid #000;
+}
+
+.canvas .entity.dragging.selected::after {
+    display: none;
 }
 
 .canvas .entity .shape[data-shape="triangle"] {
@@ -286,6 +296,10 @@
     background-color: black;
 }
 
+.canvas .entity.dragging .gizmo {
+    display: none;
+}
+
 .canvas .entity .rotation-handle {
     position: absolute;
     top: -25px;
@@ -307,8 +321,8 @@
 
 .canvas .entity .scale-handle {
     position: absolute;
-    bottom: -25px;
-    right: -25px;
+    bottom: -10px;
+    right: -10px;
 }
 
 .canvas .entity .scale-handle:after {

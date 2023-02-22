@@ -47,6 +47,8 @@ class BoardView extends EventTarget {
                 const selectedToolEl = this.#getSelectedToolEl()
 
                 if (selectedToolEl) {
+                    this.#unselectAllEntities()
+
                     const { x, y } = this.#getPositionOnCanvas(event)
                     const tool = selectedToolEl.getAttribute('data-tool')
                     const entityId = this.#peerId + this.#entityCount
@@ -85,6 +87,27 @@ class BoardView extends EventTarget {
                     selectedToolEl.classList.remove('selected')
                 }
             })
+
+            canvasEl.addEventListener('contextmenu', event => { 
+                event.preventDefault()
+            })
+
+            canvasEl.addEventListener('mousedown', event => { 
+                // Check if we clicked on an entity
+                const entityEl = event.target.closest('.entity')
+
+                if (!entityEl) {
+                    this.#unselectAllEntities()
+                }
+
+            })
+        })
+
+        // Detect if clicked outside of parentElement
+        document.addEventListener('click', event => {
+            if (!parentElement.contains(event.target)) {
+                this.#unselectAllEntities()
+            }
         })
 
         this.#canvasEl.addEventListener('mouseup', this.#dragEnd.bind(this))
@@ -179,7 +202,7 @@ class BoardView extends EventTarget {
 
                 this.#entities.set(entityId, entityEl)
 
-                entityEl.addEventListener('click', this.#handleEntityClick.bind(this, entityEl))
+                entityEl.addEventListener('mousedown', this.#handleEntityClick.bind(this, entityEl))
                 entityEl.addEventListener('mousedown', this.#dragStart.bind(this))
             })
         } else {
@@ -194,12 +217,14 @@ class BoardView extends EventTarget {
     }
 
     #handleEntityClick(entityEl) {
+        /*
         const isSelected = entityEl.classList.contains('selected')
-
-        this.#setSelected(entityEl, !isSelected)
+        this.#setEntitySelected(entityEl, !isSelected)
+        */
+        this.#setEntitySelected(entityEl, true)
     }
 
-    #setSelected(entityEl, doSelect) {
+    #setEntitySelected(entityEl, doSelect) {
         if (entityEl.classList.contains('selected') == doSelect) {
             return
         }
@@ -207,7 +232,7 @@ class BoardView extends EventTarget {
         if (doSelect) {
             const selectedEntities = this.#canvasEl.querySelectorAll('.entity.selected')
             selectedEntities.forEach(otherEntityEl => {
-                this.#setSelected(otherEntityEl, false)
+                this.#setEntitySelected(otherEntityEl, false)
             })
 
             entityEl.classList.add('selected')
@@ -216,6 +241,13 @@ class BoardView extends EventTarget {
         }
 
         this.#setupGizmoOnEntity(entityEl, doSelect)
+    }
+
+    #unselectAllEntities() {
+        const selectedEntities = this.#canvasEl.querySelectorAll('.entity.selected')
+        selectedEntities.forEach(entityEl => {
+            this.#setEntitySelected(entityEl, false)
+        })
     }
 
     #setEntityPosition(entityId, position) {
@@ -234,7 +266,7 @@ class BoardView extends EventTarget {
             return
         }
 
-        const objecEl = entityEl.querySelector('.object')
+        const objecEl = entityEl.querySelector('.rotator')
         if (!objecEl) {
             return
         }
@@ -279,7 +311,10 @@ class BoardView extends EventTarget {
 
         entityEl.innerHTML = ''
 
-        div(entityEl, shapeEl => {
+        const rotatorEl = div(entityEl)
+        rotatorEl.classList.add('rotator')
+
+        div(rotatorEl, shapeEl => {
             shapeEl.classList.add('shape')
             shapeEl.classList.add('object')
             shapeEl.setAttribute('data-shape', shape)
@@ -317,7 +352,10 @@ class BoardView extends EventTarget {
 
         entityEl.innerHTML = ''
 
-        div(entityEl, emojiEl => {
+        const rotatorEl = div(entityEl)
+        rotatorEl.classList.add('rotator')
+
+        div(rotatorEl, emojiEl => {
             emojiEl.classList.add('emoji')
             emojiEl.classList.add('object')
             emojiEl.innerText = emoji
@@ -465,9 +503,9 @@ class BoardView extends EventTarget {
 
             // We get the object because we're going to scale and rotate that element 
             // instead of the parent entity element
-            const objectEl = entityEl.querySelector('.object')
+            const rotatorEl = entityEl.querySelector('.rotator')
 
-            const rotationHandle = new RotationHandle(entityEl, objectEl)
+            const rotationHandle = new RotationHandle(entityEl, rotatorEl)
             rotationHandle.addEventListener('rotation', event => {
                 const angle = event.detail.angle
                 this.#tempProperties.set(entityId, 'angle', angle)
