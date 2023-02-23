@@ -88,11 +88,11 @@ class BoardView extends EventTarget {
                 }
             })
 
-            canvasEl.addEventListener('contextmenu', event => { 
+            canvasEl.addEventListener('contextmenu', event => {
                 event.preventDefault()
             })
 
-            canvasEl.addEventListener('mousedown', event => { 
+            canvasEl.addEventListener('mousedown', event => {
                 // Check if we clicked on an entity
                 const entityEl = event.target.closest('.entity')
 
@@ -200,6 +200,9 @@ class BoardView extends EventTarget {
                 entityEl.classList.add('entity')
                 entityEl.setAttribute('data-id', entityId)
 
+                const localTrEl = div(entityEl)
+                localTrEl.classList.add('local-transform')
+
                 this.#entities.set(entityId, entityEl)
 
                 entityEl.addEventListener('mousedown', this.#handleEntityClick.bind(this, entityEl))
@@ -266,12 +269,12 @@ class BoardView extends EventTarget {
             return
         }
 
-        const objecEl = entityEl.querySelector('.rotator')
-        if (!objecEl) {
+        const objectEl = entityEl.querySelector('.local-transform')
+        if (!objectEl) {
             return
         }
 
-        objecEl.style.transform = `rotate(${angle}deg)`
+        objectEl.style.transform = `rotate(${angle}deg)`
     }
 
     #setEntitySize(entityId, size) {
@@ -280,8 +283,13 @@ class BoardView extends EventTarget {
             return
         }
 
-        entityEl.style.width = size.width + 'px'
-        entityEl.style.height = size.height + 'px'
+        const objectEl = entityEl.querySelector('.local-transform')
+        if (!objectEl) {
+            return
+        }
+
+        objectEl.style.width = size.width + 'px'
+        objectEl.style.height = size.height + 'px'
 
         // Check if the entity is a triangle and update its border width
         const shapeEl = entityEl.querySelector('.shape')
@@ -309,18 +317,16 @@ class BoardView extends EventTarget {
             return
         }
 
-        entityEl.innerHTML = ''
+        const localTrEl = entityEl.querySelector('.local-transform')
+        localTrEl.innerHTML = ''
 
-        const rotatorEl = div(entityEl)
-        rotatorEl.classList.add('rotator')
-
-        div(rotatorEl, shapeEl => {
+        div(localTrEl, shapeEl => {
             shapeEl.classList.add('shape')
             shapeEl.classList.add('object')
             shapeEl.setAttribute('data-shape', shape)
 
-            const width = entityEl.clientWidth
-            const height = entityEl.clientHeight
+            const width = localTrEl.clientWidth
+            const height = localTrEl.clientHeight
 
             if (shape == 'triangle') {
                 shapeEl.style.borderWidth = `${width / 2}px 0px ${height / 2}px ${width}px`
@@ -350,16 +356,14 @@ class BoardView extends EventTarget {
             return
         }
 
-        entityEl.innerHTML = ''
+        const localTrEl = entityEl.querySelector('.local-transform')
+        localTrEl.innerHTML = ''
 
-        const rotatorEl = div(entityEl)
-        rotatorEl.classList.add('rotator')
-
-        div(rotatorEl, emojiEl => {
+        div(localTrEl, emojiEl => {
             emojiEl.classList.add('emoji')
             emojiEl.classList.add('object')
             emojiEl.innerText = emoji
-            const fontSize = Math.min(entityEl.clientWidth, entityEl.clientHeight) * 1
+            const fontSize = Math.min(localTrEl.clientWidth, localTrEl.clientHeight) * 1
             emojiEl.style.fontSize = fontSize + 'px'
         })
     }
@@ -503,9 +507,9 @@ class BoardView extends EventTarget {
 
             // We get the object because we're going to scale and rotate that element 
             // instead of the parent entity element
-            const rotatorEl = entityEl.querySelector('.rotator')
+            const localTransformEl = entityEl.querySelector('.local-transform')
 
-            const rotationHandle = new RotationHandle(entityEl, rotatorEl)
+            const rotationHandle = new RotationHandle(localTransformEl, localTransformEl)
             rotationHandle.addEventListener('rotation', event => {
                 const angle = event.detail.angle
                 this.#tempProperties.set(entityId, 'angle', angle)
@@ -515,7 +519,7 @@ class BoardView extends EventTarget {
                 this.#properties.set(entityId, 'angle', angle)
             })
 
-            const sizeHandle = new SizeHandle(entityEl, entityEl)
+            const sizeHandle = new SizeHandle(localTransformEl, localTransformEl)
             sizeHandle.addEventListener('size', event => {
                 const { width, height } = event.detail
                 this.#tempProperties.set(entityId, 'size', { width, height })
@@ -638,14 +642,14 @@ export class BoardDemo {
         syncButton1.addView(boardView2)
 
         /*
-
+    
         const syncButton2 = new SyncButton(demosContainerEl)
-
+    
         const boardView3 = new GCounterView(demosContainerEl, 'C')
-
+    
         syncButton1.addCounterView(gCounterView1)
         syncButton1.addCounterView(gCounterView2)
-
+    
         syncButton2.addCounterView(gCounterView2)
         syncButton2.addCounterView(gCounterView3)
         */

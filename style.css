@@ -249,16 +249,14 @@
 
 .canvas .entity {
     position: absolute;
-    width: 100px;
-    height: 100px;
 }
 
-.canvas .entity .rotator {
+.canvas .entity .local-transform {
     width: 100%;
     height: 100%;
 }
 
-.canvas .entity.selected .rotator::after {
+.canvas .entity.selected .local-transform::after {
     content: "";
     position: absolute;
     top: -5px;

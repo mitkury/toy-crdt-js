@@ -1,4 +1,4 @@
-import { element, div, span } from "/js/utils.js"
+import { element, div, span } from "/js/utils.js";
 
 export class RotationHandle extends EventTarget {
     #parentEl
@@ -8,7 +8,6 @@ export class RotationHandle extends EventTarget {
     #isRotating = false
     #prevAngle = 0
     #angle = 0
-    #prevX = 0
 
     constructor(parentEl, targetEl) {
         super()
@@ -25,22 +24,19 @@ export class RotationHandle extends EventTarget {
         document.addEventListener('mouseup', this.#handleMouseUp.bind(this))
     }
 
-    #getRotationDegrees(obj) {
-        var matrix = getComputedStyle(obj).transform;
-        if (matrix === 'none') {
-            return 0;
-        }
-        var values = matrix.split('(')[1].split(')')[0].split(',');
-        var a = values[0];
-        var b = values[1];
-        var angle = Math.round(Math.atan2(b, a) * (180 / Math.PI));
-        return angle;
+    #getRotationDegrees(obj, x, y) {
+        const rect = obj.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        const radians = Math.atan2(y - centerY, x - centerX);
+        const degrees = radians * (180 / Math.PI);
+        return degrees;
     }
 
     #handleMouseDown(event) {
         this.#isRotating = true
-        this.#prevX = event.clientX
-        this.#prevAngle = this.#getRotationDegrees(this.#targetEl)
+        this.#prevAngle = this.#getRotationDegrees(this.#targetEl, event.clientX, event.clientY)
+        this.#angle = 0
     }
 
     #handleMouseMove(event) {
@@ -48,9 +44,9 @@ export class RotationHandle extends EventTarget {
             return
         }
 
-        var currentX = event.clientX
-        this.#angle = this.#prevAngle + (currentX - this.#prevX)
-        
+        const angle = this.#getRotationDegrees(this.#targetEl, event.clientX, event.clientY);
+        this.#angle = angle - this.#prevAngle;
+
         this.dispatchEvent(new CustomEvent('rotation', {
             detail: {
                 angle: this.#angle,

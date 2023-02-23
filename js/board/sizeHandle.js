@@ -30,15 +30,30 @@ export class SizeHandle extends EventTarget {
 
     #handleMouseMove(event) {
         if (!this.#isScaling) {
-            return
+            return;
         }
+
+        const rect = this.#targetEl.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
 
         const x = event.clientX;
         const y = event.clientY;
+
         const dx = x - this.#prevX;
         const dy = y - this.#prevY;
-        this.#newWidth = Math.max(20, this.#targetEl.offsetWidth + dx);
-        this.#newHeight = Math.max(20, this.#targetEl.offsetHeight + dy);
+
+        const angle = this.#targetEl.rotation || 0;
+        const radians = angle * Math.PI / 180;
+        const cos = Math.cos(-radians);
+        const sin = Math.sin(-radians);
+
+        const rotatedDx = cos * dx - sin * dy;
+        const rotatedDy = sin * dx + cos * dy;
+
+        this.#newWidth = Math.max(20, this.#targetEl.offsetWidth + rotatedDx);
+        this.#newHeight = Math.max(20, this.#targetEl.offsetHeight + rotatedDy);
+
         this.#prevX = x;
         this.#prevY = y;
 
@@ -52,7 +67,7 @@ export class SizeHandle extends EventTarget {
 
     #handleMouseUp() {
         if (!this.#isScaling) {
-            return
+            return;
         }
 
         this.#isScaling = false;
