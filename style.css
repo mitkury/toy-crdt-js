@@ -207,7 +207,7 @@
     background-color: #DEDEDE;
 }
 
-.tools .tool {
+.tool {
     position: relative;
     top: 0%;
     width: 50px;
@@ -216,8 +216,8 @@
     cursor: pointer;
 }
 
-.tools .tool:hover .icon,
-.tools .tool.selected .icon {
+.tool:hover .icon,
+.tool.selected .icon {
     top: -25%;
 }
 
@@ -226,6 +226,19 @@
     bottom: -25%;
     width: 100%;
     height: 100%;
+}
+
+.tool.ghost {
+    position: absolute;
+    display: none;
+    opacity: 0.3;
+    cursor: default;
+}
+.tool.ghost.active {
+    display: block;
+}
+.tool.ghost .icon { 
+    top: 0 !important; 
 }
 
 .tool[data-shape="rectangle"] .icon {

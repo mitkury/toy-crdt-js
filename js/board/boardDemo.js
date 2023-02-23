@@ -43,75 +43,32 @@ class BoardView extends EventTarget {
         this.#canvasEl = div(containerEl, canvasEl => {
             canvasEl.classList.add('canvas')
 
-            canvasEl.addEventListener('click', event => {
-                const selectedToolEl = this.#getSelectedToolEl()
+            canvasEl.addEventListener('click', this.#handleCanvasClick.bind(this))
 
-                if (selectedToolEl) {
+            canvasEl.addEventListener('mousedown', event => {
+                // Unselect all entities if clicked outside of them
+                const entityEl = event.target.closest('.entity')
+                if (!entityEl) {
                     this.#unselectAllEntities()
-
-                    const { x, y } = this.#getPositionOnCanvas(event)
-                    const tool = selectedToolEl.getAttribute('data-tool')
-                    const entityId = this.#peerId + this.#entityCount
-                    this.#entityCount++
-
-                    this.#properties.setPending(entityId, 'exists', true)
-
-                    const size = {
-                        width: 50,
-                        height: 50
-                    }
-                    this.#properties.setPending(entityId, 'size', size)
-
-                    const position = {
-                        x: x - size.width / 2,
-                        y: y - size.height / 2
-                    }
-                    this.#properties.setPending(entityId, 'position', position)
-
-                    switch (tool) {
-                        case 'shape':
-                            const shape = selectedToolEl.getAttribute('data-shape')
-                            const color = selectedToolEl.getAttribute('data-color')
-                            this.#properties.setPending(entityId, 'shape', shape)
-                            this.#properties.setPending(entityId, 'color', color)
-                            break
-
-                        case 'emoji':
-                            const emoji = selectedToolEl.getAttribute('data-emoji')
-                            this.#properties.setPending(entityId, 'emoji', emoji)
-                            break
-                    }
-
-                    this.#properties.applyPending()
-
-                    selectedToolEl.classList.remove('selected')
                 }
             })
+
 
             canvasEl.addEventListener('contextmenu', event => {
                 event.preventDefault()
             })
-
-            canvasEl.addEventListener('mousedown', event => {
-                // Check if we clicked on an entity
-                const entityEl = event.target.closest('.entity')
-
-                if (!entityEl) {
-                    this.#unselectAllEntities()
-                }
-
-            })
         })
 
-        // Detect if clicked outside of parentElement
+        // Detect if clicked outside of containerEl
         document.addEventListener('click', event => {
-            if (!parentElement.contains(event.target)) {
+            if (!containerEl.contains(event.target)) {
                 this.#unselectAllEntities()
             }
         })
 
-        this.#canvasEl.addEventListener('mouseup', this.#dragEnd.bind(this))
-        this.#canvasEl.addEventListener('mousemove', this.#drag.bind(this))
+        this.#canvasEl.addEventListener('mouseup', this.#handleMouseUpOnCanvas.bind(this))
+        this.#canvasEl.addEventListener('mousemove', this.#handleCursorMoveOnCanvas.bind(this))
+        this.#canvasEl.addEventListener('mouseleave', this.#handleCursorMoveOnCanvasEnd.bind(this))
 
         this.#toolsEl = div(containerEl, toolsPanelEl => {
             toolsPanelEl.classList.add('tools')
@@ -385,7 +342,56 @@ class BoardView extends EventTarget {
         }
     }
 
-    #dragEnd(event) {
+    #handleCanvasClick(event) {
+        const selectedToolEl = this.#getSelectedToolEl()
+
+        if (selectedToolEl) {
+            this.#useTool(selectedToolEl, event)
+        }
+    }
+
+    #useTool(toolEl, event) {
+        this.#unselectAllEntities()
+
+        const { x, y } = this.#getPositionOnCanvas(event)
+        const tool = toolEl.getAttribute('data-tool')
+        const entityId = this.#peerId + this.#entityCount
+        this.#entityCount++
+
+        this.#properties.setPending(entityId, 'exists', true)
+
+        const size = {
+            width: 50,
+            height: 50
+        }
+        this.#properties.setPending(entityId, 'size', size)
+
+        const position = {
+            x: x - size.width / 2,
+            y: y - size.height / 2
+        }
+        this.#properties.setPending(entityId, 'position', position)
+
+        switch (tool) {
+            case 'shape':
+                const shape = toolEl.getAttribute('data-shape')
+                const color = toolEl.getAttribute('data-color')
+                this.#properties.setPending(entityId, 'shape', shape)
+                this.#properties.setPending(entityId, 'color', color)
+                break
+
+            case 'emoji':
+                const emoji = toolEl.getAttribute('data-emoji')
+                this.#properties.setPending(entityId, 'emoji', emoji)
+                break
+        }
+
+        this.#properties.applyPending()
+
+        toolEl.classList.remove('selected')
+    }
+
+    #handleMouseUpOnCanvas(event) {
         const draggingEntities = this.#canvasEl.querySelectorAll('.entity.dragging')
 
         const { x, y } = this.#getPositionOnCanvas(event)
@@ -394,11 +400,42 @@ class BoardView extends EventTarget {
         draggingEntities.forEach(entityEl => {
             entityEl.classList.remove('dragging')
         })
+
+        const selectedToolEl = this.#getSelectedToolEl()
+        if (selectedToolEl) {
+            this.#useTool(selectedToolEl, event)
+        }
     }
 
-    #drag(event) {
+    #handleCursorMoveOnCanvas(event) {
         const { x, y } = this.#getPositionOnCanvas(event)
         this.#setPositionOfDraggingEntities(x, y, true)
+
+        const selectedTool = this.#getSelectedToolEl()
+        if (selectedTool) {
+            const toolType = selectedTool.getAttribute('data-tool')
+            const toolShape = selectedTool.getAttribute('data-shape')
+
+            const ghostToolEl = this.#toolGhosts.get(toolShape || toolType)
+            if (ghostToolEl) {
+                const ghostWidth = ghostToolEl.clientWidth
+                const ghostHeight = ghostToolEl.clientHeight
+
+                ghostToolEl.classList.add('active')
+                ghostToolEl.style.left = x - ghostWidth / 2 + 'px'
+                ghostToolEl.style.top = y - ghostHeight / 2 + 'px'
+            }
+        } else {
+            this.#toolGhosts.forEach(ghostToolEl => {
+                ghostToolEl.classList.remove('active')
+            })
+        }
+    }
+
+    #handleCursorMoveOnCanvasEnd(event) {
+        this.#toolGhosts.forEach(ghostToolEl => {
+            ghostToolEl.classList.remove('active')
+        })
     }
 
     #setPositionOfDraggingEntities(cursorX, cursorY, isTemp) {
@@ -434,6 +471,8 @@ class BoardView extends EventTarget {
         this.#createEmojiTool()
     }
 
+    #toolGhosts = new Map()
+
     #createShapeTool(type) {
         const toolEl = div(this.#toolsEl, toolEl => {
             toolEl.classList.add('tool')
@@ -443,9 +482,18 @@ class BoardView extends EventTarget {
             div(toolEl).classList.add('icon')
         })
 
-        toolEl.addEventListener('click', _ => {
+        toolEl.addEventListener('mousedown', _ => {
             this.#handleToolSelection(toolEl)
         })
+
+        this.#toolGhosts.set(type, div(this.#canvasEl, ghostEl => {
+            ghostEl.classList.add('ghost')
+            ghostEl.classList.add('tool')
+            ghostEl.setAttribute('data-shape', type)
+
+            const icon = div(ghostEl)
+            icon.classList.add('icon')
+        }))
     }
 
     #setColorToAllShapeTools(color) {
@@ -477,10 +525,25 @@ class BoardView extends EventTarget {
             })
         })
 
-        toolEl.addEventListener('click', _ => {
-            toolEl.setAttribute('data-emoji', getRandomEmoji())
+        const ghostTool = div(this.#canvasEl, ghostEl => {
+            ghostEl.classList.add('ghost')
+            ghostEl.classList.add('tool')
+
+            const icon = div(ghostEl)
+            icon.classList.add('icon')
+        })
+        this.#toolGhosts.set('emoji', ghostTool)
+
+        toolEl.addEventListener('mousedown', _ => {
+            const emoji = getRandomEmoji()
+            toolEl.setAttribute('data-emoji', emoji)
+            toolEl.querySelector('.icon').innerText = emoji
+            ghostTool.querySelector('.icon').innerText = emoji
+
             this.#handleToolSelection(toolEl)
         })
+
+        
     }
 
     #handleToolSelection(toolEl) {
