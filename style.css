@@ -263,7 +263,7 @@
     left: -5px;
     width: calc(100% + 10px);
     height: calc(100% + 10px);
-    border: 1px solid #000;
+    outline: 2px solid  rgba(140, 140, 140, 0.3);
 }
 
 .canvas .entity.dragging.selected::after {
@@ -300,7 +300,7 @@
 
 .canvas .entity .rotation-handle {
     position: absolute;
-    top: -25px;
+    top: -24px;
     right: 50%;
 }
 
@@ -308,29 +308,30 @@
     display: block;
     content: "";
     position: absolute;
-    width: 14px;
-    height: 14px;
-    right: -7px;
-    border-radius: 50%;
-    background-color: black;
+    width: 24px;
+    height: 24px;
+    right: -12px;
+    top: -12px;
+    background: url('img/rotation-icon.svg');
     cursor: ew-resize;
     z-index: 999;
 }
 
 .canvas .entity .scale-handle {
     position: absolute;
-    bottom: -10px;
-    right: -10px;
+    bottom: 3px;
+    right: 3px;
 }
 
 .canvas .entity .scale-handle:after {
     display: block;
     content: "";
     position: absolute;
-    width: 14px;
-    height: 14px;
-    right: -7px;
-    background-color: black;
+    width: 24px;
+    height: 24px;
+    right: -12px;
+    top: -12px;
+    background: url('/img/scale-icon.svg');
     cursor: ew-resize;
     z-index: 999;
 }
