@@ -1,14 +1,14 @@
 import { div } from "/js/utils.js";
 
 export class SizeHandle extends EventTarget {
-    #element
-    #targetEl
-    #isScaling = false
-    #prevX = 0
-    #prevY = 0
-
-    #newWidth = 0
-    #newHeight = 0
+    #element;
+    #targetEl;
+    #isScaling = false;
+    #prevX = 0;
+    #prevY = 0;
+    #newWidth = 0;
+    #newHeight = 0;
+    #isProportional = true;
 
     constructor(parentEl, targetEl) {
         super();
@@ -17,9 +17,13 @@ export class SizeHandle extends EventTarget {
         this.#element.classList.add("scale-handle");
         this.#element.classList.add("gizmo");
 
-        this.#element.addEventListener('mousedown', this.#handleMouseDown.bind(this));
-        document.addEventListener('mousemove', this.#handleMouseMove.bind(this));
-        document.addEventListener('mouseup', this.#handleMouseUp.bind(this));
+        this.#element.addEventListener("mousedown", this.#handleMouseDown.bind(this));
+        document.addEventListener("mousemove", this.#handleMouseMove.bind(this));
+        document.addEventListener("mouseup", this.#handleMouseUp.bind(this));
+    }
+
+    set isProportional(value) {
+        this.#isProportional = value;
     }
 
     #handleMouseDown(event) {
@@ -51,13 +55,21 @@ export class SizeHandle extends EventTarget {
         const rotatedDx = cos * dx - sin * dy;
         const rotatedDy = sin * dx + cos * dy;
 
-        this.#newWidth = Math.max(20, this.#targetEl.offsetWidth + rotatedDx);
-        this.#newHeight = Math.max(20, this.#targetEl.offsetHeight + rotatedDy);
+        if (this.#isProportional) {
+            const prevRatio = this.#targetEl.offsetWidth / this.#targetEl.offsetHeight;
+            const newRatio = (this.#targetEl.offsetWidth + rotatedDx) / (this.#targetEl.offsetHeight + rotatedDy);
+            const scale = newRatio > prevRatio ? rotatedDx / this.#targetEl.offsetWidth : rotatedDy / this.#targetEl.offsetHeight;
+            this.#newWidth = Math.max(20, this.#targetEl.offsetWidth * (1 + scale));
+            this.#newHeight = Math.max(20, this.#targetEl.offsetHeight * (1 + scale));
+        } else {
+            this.#newWidth = Math.max(20, this.#targetEl.offsetWidth + rotatedDx);
+            this.#newHeight = Math.max(20, this.#targetEl.offsetHeight + rotatedDy);
+        }
 
         this.#prevX = x;
         this.#prevY = y;
 
-        this.dispatchEvent(new CustomEvent('size', {
+        this.dispatchEvent(new CustomEvent("size", {
             detail: {
                 width: this.#newWidth,
                 height: this.#newHeight,
@@ -72,7 +84,7 @@ export class SizeHandle extends EventTarget {
 
         this.#isScaling = false;
 
-        this.dispatchEvent(new CustomEvent('finalSize', {
+        this.dispatchEvent(new CustomEvent("finalSize", {
             detail: {
                 width: this.#newWidth,
                 height: this.#newHeight,

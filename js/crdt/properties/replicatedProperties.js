@@ -26,7 +26,13 @@ export class ReplicatedProperties {
             return null
         }
 
-        return this.entities[entityId][0]
+        const propPair = this.entities[entityId][propertyName]
+
+        if (!propPair) {
+            return null
+        }
+
+        return propPair[0]
     }
 
     set(entityId, propertyName, value) {

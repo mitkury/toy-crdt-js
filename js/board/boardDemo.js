@@ -298,7 +298,7 @@ class BoardView extends EventTarget {
             if (shapeType == 'triangle') {
                 const width = entityEl.clientWidth
                 const height = entityEl.clientHeight
-                shapeEl.style.borderWidth = `${width / 2}px 0px ${height / 2}px ${width}px`
+                shapeEl.style.borderWidth = `0px ${width / 2}px ${height}px ${width / 2}px`
             }
         }
 
@@ -329,7 +329,7 @@ class BoardView extends EventTarget {
             const height = localTrEl.clientHeight
 
             if (shape == 'triangle') {
-                shapeEl.style.borderWidth = `${width / 2}px 0px ${height / 2}px ${width}px`
+                shapeEl.style.borderWidth = `0px ${width / 2}px ${height}px ${width / 2}px`
             }
         })
     }
@@ -344,7 +344,7 @@ class BoardView extends EventTarget {
         const shape = shapeEl.getAttribute('data-shape')
 
         if (shape == 'triangle') {
-            shapeEl.style.borderColor = `transparent transparent transparent ${color}`
+            shapeEl.style.borderColor = `transparent transparent ${color} transparent`
         } else {
             shapeEl.style.backgroundColor = color
         }
@@ -457,7 +457,7 @@ class BoardView extends EventTarget {
             const toolIcon = toolEl.querySelector('.icon')
             const shape = toolEl.getAttribute('data-shape')
             if (shape == 'triangle') {
-                toolIcon.style.borderColor = `transparent transparent transparent ${color}`
+                toolIcon.style.borderBottomColor = color
             } else {
                 toolIcon.style.backgroundColor = color
             }
@@ -510,6 +510,7 @@ class BoardView extends EventTarget {
             const localTransformEl = entityEl.querySelector('.local-transform')
 
             const rotationHandle = new RotationHandle(localTransformEl, localTransformEl)
+
             rotationHandle.addEventListener('rotation', event => {
                 const angle = event.detail.angle
                 this.#tempProperties.set(entityId, 'angle', angle)
@@ -528,6 +529,12 @@ class BoardView extends EventTarget {
                 const { width, height } = event.detail
                 this.#properties.set(entityId, 'size', { width, height })
             })
+
+            sizeHandle.isProportional = false
+
+            // Allow to scale emojis proportionally only
+            const emoji = this.#properties.get(entityId, 'emoji')
+            sizeHandle.isProportional = emoji ? true : false
 
             this.#activeRotationHandle = rotationHandle
             this.#activeSizeHandle = sizeHandle
