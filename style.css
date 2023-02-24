@@ -107,7 +107,7 @@
     z-index: 1;
 }
 
-.demo .sync-button-wrapper .button {
+.demo .sync-button-wrapper .button, .demo .sync-button-wrapper .toggle {
     margin: 70px 10px 0 10px;
     position: relative;
     z-index: 1;
@@ -181,6 +181,18 @@
 .disabled .button {
     background-color: #A0A0A0;
     cursor: default;
+}
+
+.toggle {
+    display: inline-block;
+    height: 38px;
+    line-height: 38px;
+    padding: 0 10px 0 10px;
+    border-radius: 8px;
+    background-color: #DEDEDE;
+    color: black;
+    cursor: pointer;
+    user-select: none;
 }
 
 .demo-card.counter {}
@@ -378,4 +390,77 @@
     background: url('/img/scale-icon.svg');
     cursor: ew-resize;
     z-index: 999;
+}
+
+
+.toggle {
+    display: flex;
+    align-items: center;
+}
+
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 62px;
+    height: 28px;
+    margin: 10px;
+    cursor: pointer;
+}
+
+.switch .bg {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: #737373;
+    border-radius: 18px;
+}
+
+.switch input {
+    display: none;
+}
+
+.knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background-color: #DEDEDE;
+    transition: all 0.1s;
+}
+
+.label-on,
+.label-off {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 10px;
+    font-weight: bold;
+    color: #fff;
+    visibility: hidden;
+}
+
+.label-on {
+    left: 12px;
+}
+
+.label-off {
+    left: 32px;
+}
+
+.switch input:checked ~ .knob {
+    transform: translateX(34px);
+}
+
+.switch input:checked ~ .bg {
+    background-color: #4CAF50;
+}
+
+.switch input:checked ~ .label-on {
+    visibility: visible;
+}
+
+.switch input:not(:checked) ~ .label-off {
+    visibility: visible;
 }
