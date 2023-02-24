@@ -4,6 +4,38 @@ import { ReplicatedProperties } from "/js/crdt/properties/replicatedProperties.j
 import { RotationHandle } from '/js/board/rotationHandle.js'
 import { SizeHandle } from '/js/board/sizeHandle.js'
 
+const COLORS = [
+    { id: null, color: '#F40404' },   // Red
+    { id: null, color: '#0C48CC' },   // Blue
+    { id: null, color: '#2CB494' },   // Teal
+    { id: null, color: '#88409C' },   // Purple
+    { id: null, color: '#F88C14' },   // Orange
+    { id: null, color: '#703014' },   // Brown
+    { id: null, color: '#088008' },   // Green
+    { id: null, color: '#4068D4' }    // Dark Aqua
+]
+
+function changeToNextColor(id) {
+    const currentIndex = COLORS.findIndex(c => c.id === id);
+    let nextIndex = (currentIndex + 1) % COLORS.length;
+  
+    while (COLORS[nextIndex].id !== null && nextIndex !== currentIndex) {
+      nextIndex = (nextIndex + 1) % COLORS.length;
+    }
+  
+    if (nextIndex !== currentIndex) {
+      if (currentIndex !== -1) {
+        COLORS[currentIndex].id = null;
+      }
+  
+      COLORS[nextIndex].id = id;
+      return COLORS[nextIndex].color;
+    }
+  
+    return null;
+  }
+
+
 class BoardView extends EventTarget {
     #peerId
     #properties
@@ -13,6 +45,7 @@ class BoardView extends EventTarget {
     #entities = new Map()
     #entityCount
     #draggingEntitiesOffset = new Map()
+    #targetColor = null
 
     constructor(parentElement, peerId) {
         super()
@@ -25,6 +58,8 @@ class BoardView extends EventTarget {
 
         this.#properties.subscribeToChanges(this.#handlePropertyChange.bind(this))
         this.#tempProperties.subscribeToChanges(this.#handlePropertyChange.bind(this))
+
+        this.#targetColor = changeToNextColor(peerId)
 
         const amountOfCardsInParent = parentElement.getElementsByClassName('demo-card').length;
         const containerEl = div(parentElement, demoCardEl => {
@@ -70,7 +105,19 @@ class BoardView extends EventTarget {
         this.#canvasEl.addEventListener('mousemove', this.#handleCursorMoveOnCanvas.bind(this))
         this.#canvasEl.addEventListener('mouseleave', this.#handleCursorMoveOnCanvasEnd.bind(this))
 
-        this.#toolsEl = div(containerEl, toolsPanelEl => {
+        const panelEl = div(containerEl)
+        panelEl.classList.add('panel')
+
+        const colorChangerEl = div(panelEl)
+        colorChangerEl.classList.add('color-changer')
+        colorChangerEl.addEventListener('click', event => {
+            this.#targetColor = changeToNextColor(this.#peerId)
+            this.#setColorToAllShapeTools(this.#targetColor)
+            colorChangerEl.style.backgroundColor = this.#targetColor
+            titleEl.style.backgroundColor = this.#targetColor
+        })
+
+        this.#toolsEl = div(panelEl, toolsPanelEl => {
             toolsPanelEl.classList.add('tools')
         })
 
@@ -88,10 +135,8 @@ class BoardView extends EventTarget {
 
         this.#createTools()
 
-        // Get a computed background color of the title element from CSS
-        const titleBackgroundColor = window.getComputedStyle(titleEl).backgroundColor
-        // And use it as the default color for the shape tools
-        this.#setColorToAllShapeTools(titleBackgroundColor)
+        this.#setColorToAllShapeTools(this.#targetColor)
+        colorChangerEl.style.backgroundColor = this.#targetColor
     }
 
     equals() {
@@ -543,7 +588,7 @@ class BoardView extends EventTarget {
             this.#handleToolSelection(toolEl)
         })
 
-        
+
     }
 
     #handleToolSelection(toolEl) {
