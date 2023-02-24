@@ -152,10 +152,16 @@
     z-index: 100;
 }
 
+.demo .sync-button-wrapper.realtime .connection,
+.demo .sync-button-wrapper.realtime .connection:before,
+.demo .sync-button-wrapper.realtime .connection:after {
+    background-color: #4CAF50;
+}
+
 .demo .sync-button-wrapper.disabled .connection,
 .demo .sync-button-wrapper.disabled .connection:before,
 .demo .sync-button-wrapper.disabled .connection:after {
-    background-color: #A0A0A0;
+    background-color: #A0A0A0 !important;
 }
 
 .button {

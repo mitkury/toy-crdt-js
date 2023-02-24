@@ -675,6 +675,7 @@ class SyncRealtimeButton {
 
         this.#containerEl = div(parentElement, wrapperEl => {
             wrapperEl.classList.add('sync-button-wrapper')
+            wrapperEl.classList.add('realtime')
 
             div(wrapperEl, toggleEl => {
                 toggleEl.classList.add('toggle')
@@ -686,6 +687,9 @@ class SyncRealtimeButton {
                 switchEl.classList.add('switch')
                 const checkboxEl = element('input', switchEl)
                 checkboxEl.setAttribute('type', 'checkbox')
+                if (this.#on) { 
+                    checkboxEl.setAttribute('checked', 'checked')
+                }
                 const bgEl = div(switchEl)
                 bgEl.classList.add('bg')
                 const knobEl = div(switchEl)
