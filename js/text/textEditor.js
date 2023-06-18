@@ -1,8 +1,8 @@
-import { element, div } from "/js/utils.js"
-import { OpId } from "/js/crdt/opId.js"
-import { ReplicatedTreeOfBlocks } from "/js/crdt/ReplicatedTreeOfBlocks.js"
-import { ActivationOperation, CreationOperation } from "/js/crdt/operations.js"
-import { diff, NOOP, REPLACE, DELETE, INSERT } from "/js/myersDiff.js"
+import { element, div } from "../utils.js" 
+import { OpId } from "../crdt/opId.js"
+import { ReplicatedTreeOfBlocks } from "../crdt/replicatedTreeOfBlocks.js"
+import { ActivationOperation, CreationOperation } from "../crdt/operations.js"
+import { diff, NOOP, REPLACE, DELETE, INSERT } from "./myersDiff.js"
 
 export class Editor extends EventTarget {
 
@@ -11,7 +11,7 @@ export class Editor extends EventTarget {
     #domElements = {}
     #caret = null
     #observer = null
-    #isOnline = false
+    #isOnline = true
     replicatedBlocks = null
     #opsDidByClient = []
     #opsUndidByClient = []

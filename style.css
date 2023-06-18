@@ -32,6 +32,10 @@ article {
   line-break: anywhere;
 }
 
+.editor {
+  width: 33%;
+}
+
 .editor p {
   margin: 0;
 }
@@ -541,5 +545,9 @@ article {
   .demo .sync-button-wrapper .button,
   .demo .sync-button-wrapper .toggle {
     margin: 20px 0;
+  }
+
+  .editor {
+    width: 100%;
   }
 }

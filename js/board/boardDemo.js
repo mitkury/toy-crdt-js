@@ -1,8 +1,8 @@
-import { element, div, span, nodeHasDataId } from "/js/utils.js"
-import { getRandomEmoji } from "/js/emojis.js"
-import { ReplicatedProperties } from "/js/crdt/properties/replicatedProperties.js"
-import { RotationHandle } from '/js/board/rotationHandle.js'
-import { SizeHandle } from '/js/board/sizeHandle.js'
+import { element, div, span, nodeHasDataId } from "../utils.js"
+import { getRandomEmoji } from "./emojis.js"
+import { ReplicatedProperties } from "../crdt/properties/replicatedProperties.js"
+import { RotationHandle } from "./rotationHandle.js"
+import { SizeHandle } from "./sizeHandle.js"
 
 const COLORS = [
     { id: null, color: '#F40404' },   // Red
@@ -777,18 +777,5 @@ export class BoardDemo {
 
         syncButton1.addView(boardView1)
         syncButton1.addView(boardView2)
-
-        /*
-    
-        const syncButton2 = new SyncButton(demosContainerEl)
-    
-        const boardView3 = new GCounterView(demosContainerEl, 'C')
-    
-        syncButton1.addCounterView(gCounterView1)
-        syncButton1.addCounterView(gCounterView2)
-    
-        syncButton2.addCounterView(gCounterView2)
-        syncButton2.addCounterView(gCounterView3)
-        */
     }
 }
