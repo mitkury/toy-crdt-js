@@ -1,4 +1,4 @@
-import { Editor } from "/js/editor.js"
+import { Editor } from "/js/editor2.js"
 
 console.log('Start Toy Editor')
 

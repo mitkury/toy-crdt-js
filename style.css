@@ -1,472 +1,545 @@
 * {
-    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+}
+
+h1 {
+  font-size: 2.5em;
+}
+
+h2 {
+  font-size: 2em;
+}
+
+article {
+  max-width: 1000px;
+  margin: 0 auto;
 }
 
 #editors {
-    width: 100%;
-    max-width: 100%;
-    margin-top: 50px;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
 }
 
 .content {
-    min-height: 200px;
-    border: 1px solid #ccc;
-    background-color: #fff;
-    padding: 5px;
-    overflow-wrap: break-word;
-    line-break: anywhere;
+  min-height: 200px;
+  border: 1px solid #ccc;
+  background-color: #fff;
+  padding: 5px;
+  overflow-wrap: break-word;
+  line-break: anywhere;
 }
 
 .editor p {
-    margin: 0;
+  margin: 0;
 }
 
 .demo {
-    display: flex;
-    max-width: 1000px;
-    width: 100%;
-    margin: 0 auto;
-    margin-bottom: 38px;
+  display: flex;
+  width: 100%;
+  margin: 0 auto;
+  margin-bottom: 38px;
 }
 
 .demo-card {
-    position: relative;
-    width: 160px;
-    background-color: #DEDEDE;
-    text-align: center;
-    border-radius: 8px;
-    font-size: 16px;
-    overflow: hidden;
-    box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+  position: relative;
+  width: 160px;
+  background-color: #DEDEDE;
+  text-align: center;
+  border-radius: 8px;
+  font-size: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
 }
 
 .demo-card .title {
-    height: 38px;
-    line-height: 38px;
-    color: #fff;
+  height: 38px;
+  line-height: 38px;
+  color: #fff;
 }
 
 .demo-card[data-card-no="1"] .title {
-    background-color: #F40404;
+  background-color: #F40404;
 }
 
 .demo-card[data-card-no="2"] .title {
-    background-color: #0C48CC;
+  background-color: #0C48CC;
 }
 
 .demo-card[data-card-no="3"] .title {
-    background-color: #2CB494;
+  background-color: #2CB494;
 }
 
 .demo-card[data-card-no="4"] .title {
-    background-color: #88409C;
+  background-color: #88409C;
 }
 
 .demo-card[data-card-no="5"] .title {
-    background-color: #F88C14;
+  background-color: #F88C14;
 }
 
 .demo-card[data-card-no="6"] .title {
-    background-color: #703014;
+  background-color: #703014;
 }
 
 .demo-card .value {
-    font-size: 64px;
-    line-height: 100px;
-    font-weight: 600;
+  font-size: 64px;
+  line-height: 100px;
+  font-weight: 600;
 }
 
 .demo-card .button-wrapper {
-    padding: 14px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+  padding: 14px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .demo-card .button-wrapper .button {
-    flex-grow: 1;
+  flex-grow: 1;
 }
 
 .demo-card .button-wrapper-2-buttons {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-gap: 10px;
-    padding: 14px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-gap: 10px;
+  padding: 14px;
 }
 
 .demo-card .button-wrapper-2-buttons .button {}
 
 .demo .sync-button-wrapper {
-    position: relative;
-    justify-content: center;
-    display: flex;
-    flex-grow: 1;
-    z-index: 1;
+  position: relative;
+  justify-content: center;
+  display: flex;
+  flex-grow: 1;
+  z-index: 1;
 }
 
-.demo .sync-button-wrapper .button, .demo .sync-button-wrapper .toggle {
-    margin: 70px 10px 0 10px;
-    position: relative;
-    z-index: 1;
+.demo .sync-button-wrapper .button,
+.demo .sync-button-wrapper .toggle {
+  margin: 70px 10px 0 10px;
+  position: relative;
+  z-index: 1;
 }
 
 /* Line */
 .demo .sync-button-wrapper .connection {
-    display: block;
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 89px;
-    width: 100%;
-    height: 2px;
-    background-color: #000;
-    z-index: 0;
+  display: block;
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 89px;
+  width: 100%;
+  height: 2px;
+  background-color: #000;
+  z-index: 0;
 }
 
 .demo .sync-button-wrapper .connection:before {
-    display: block;
-    content: "";
-    position: absolute;
-    left: -4px;
-    top: -3px;
-    width: 8px;
-    height: 8px;
-    background-color: #000;
-    border-radius: 100%;
-    z-index: 100;
+  display: block;
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  background-color: #000;
+  border-radius: 100%;
+  z-index: 100;
 }
 
 .demo .sync-button-wrapper .connection:after {
-    display: block;
-    content: "";
-    position: absolute;
-    right: -4px;
-    top: -3px;
-    width: 8px;
-    height: 8px;
-    background-color: #000;
-    border-radius: 100%;
-    z-index: 100;
+  display: block;
+  content: "";
+  position: absolute;
+  right: -4px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  background-color: #000;
+  border-radius: 100%;
+  z-index: 100;
 }
 
 .demo .sync-button-wrapper.realtime .connection,
 .demo .sync-button-wrapper.realtime .connection:before,
 .demo .sync-button-wrapper.realtime .connection:after {
-    background-color: #4CAF50;
+  background-color: #4CAF50;
 }
 
 .demo .sync-button-wrapper.disabled .connection,
 .demo .sync-button-wrapper.disabled .connection:before,
 .demo .sync-button-wrapper.disabled .connection:after {
-    background-color: #A0A0A0 !important;
+  background-color: #A0A0A0 !important;
 }
 
 .button {
-    display: inline-block;
-    height: 38px;
-    line-height: 38px;
-    padding: 0 10px 0 10px;
-    border-radius: 8px;
-    background-color: #000000;
-    color: #fff;
-    cursor: pointer;
-    user-select: none;
+  display: inline-block;
+  height: 38px;
+  line-height: 38px;
+  padding: 0 10px 0 10px;
+  border-radius: 8px;
+  background-color: #000000;
+  color: #fff;
+  cursor: pointer;
+  user-select: none;
 }
 
 .button svg {
-    position: relative;
-    top: -2px;
-    width: 24px;
-    height: 24px;
-    vertical-align: middle;
+  position: relative;
+  top: -2px;
+  width: 24px;
+  height: 24px;
+  vertical-align: middle;
 }
 
 .disabled .button {
-    background-color: #A0A0A0;
-    cursor: default;
+  background-color: #A0A0A0;
+  cursor: default;
 }
 
 .toggle {
-    display: inline-block;
-    height: 38px;
-    line-height: 38px;
-    padding: 0 10px 0 10px;
-    border-radius: 8px;
-    background-color: #DEDEDE;
-    color: black;
-    cursor: pointer;
-    user-select: none;
+  display: inline-block;
+  height: 38px;
+  line-height: 38px;
+  padding: 0 10px 0 10px;
+  border-radius: 8px;
+  background-color: #DEDEDE;
+  color: black;
+  cursor: pointer;
+  user-select: none;
 }
 
 .demo-card.counter {}
 
 .demo-card.board {
-    width: 380px;
-    background-color: #fff;
-    user-select: none;
+  width: 380px;
+  background-color: #fff;
+  user-select: none;
 }
 
 .demo-card.board .canvas {
-    position: relative;
-    overflow: hidden;
-    height: 292px;
+  position: relative;
+  overflow: hidden;
+  height: 292px;
 }
 
 .demo-card.board .panel {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: flex-start;
-    background-color: #DEDEDE;
-    height: 50px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  background-color: #DEDEDE;
+  height: 50px;
 }
 
 .demo-card.board .panel .color-changer {
-    position: relative;
-    width: 34px;
-    height: 100%;
-    background-color: blue;
-    cursor: pointer;
+  position: relative;
+  width: 34px;
+  height: 100%;
+  background-color: blue;
+  cursor: pointer;
 }
 
 .demo-card.board .panel .color-changer::after {
-    content: '';
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    top: 0;
-    left: 0;
-    background: url('/img/reset-icon.svg') no-repeat center center;
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  background: url('/img/reset-icon.svg') no-repeat center center;
 }
 
 .demo-card.board .tools {
-    position: relative;
-    flex-grow: 1;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding-left: 35px;
-    padding-right: 15px;
+  position: relative;
+  flex-grow: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: 35px;
+  padding-right: 15px;
 }
 
 .tool {
-    position: relative;
-    top: 0%;
-    width: 50px;
-    height: 50px;
-    font-size: 40px;
-    cursor: pointer;
+  position: relative;
+  top: 0%;
+  width: 50px;
+  height: 50px;
+  font-size: 40px;
+  cursor: pointer;
 }
 
 .tool:hover .icon,
 .tool.selected .icon {
-    top: -25%;
+  top: -25%;
 }
 
 .tool .icon {
-    position: absolute;
-    bottom: -25%;
-    width: 100%;
-    height: 100%;
+  position: absolute;
+  bottom: -25%;
+  width: 100%;
+  height: 100%;
 }
 
 .tool.ghost {
-    position: absolute;
-    display: none;
-    opacity: 0.3;
-    cursor: default;
+  position: absolute;
+  display: none;
+  opacity: 0.3;
+  cursor: default;
 }
+
 .tool.ghost.active {
-    display: block;
+  display: block;
 }
-.tool.ghost .icon { 
-    top: 0 !important; 
+
+.tool.ghost .icon {
+  top: 0 !important;
 }
 
 .tool[data-shape="rectangle"] .icon {
-    background-color: black;
+  background-color: black;
 }
 
 .tool[data-shape="circle"] .icon {
-    border-radius: 50%;
-    background-color: black;
+  border-radius: 50%;
+  background-color: black;
 }
 
 .tool[data-shape="triangle"] .icon {
-    width: 0;
-    height: 0;
-    border-top: none;
-    border-right: 25px solid transparent;
-    border-bottom: 50px solid #000;
-    border-left: 25px solid transparent;
+  width: 0;
+  height: 0;
+  border-top: none;
+  border-right: 25px solid transparent;
+  border-bottom: 50px solid #000;
+  border-left: 25px solid transparent;
 }
 
 .canvas .entity {
-    position: absolute;
+  position: absolute;
 }
 
 .canvas .entity .local-transform {
-    width: 100%;
-    height: 100%;
+  width: 100%;
+  height: 100%;
 }
 
 .canvas .entity .emoji {
-    position: relative;
-    top: -15%;
+  position: relative;
+  top: -15%;
 }
 
 .canvas .entity.selected .local-transform::after {
-    content: "";
-    position: absolute;
-    top: -5px;
-    left: -5px;
-    width: calc(100% + 10px);
-    height: calc(100% + 10px);
-    outline: 2px solid  rgba(140, 140, 140, 0.3);
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: -5px;
+  width: calc(100% + 10px);
+  height: calc(100% + 10px);
+  outline: 2px solid rgba(140, 140, 140, 0.3);
 }
 
 .canvas .entity.dragging.selected::after {
-    display: none;
+  display: none;
 }
 
 .canvas .entity .shape[data-shape="triangle"] {
-    position: absolute;
-    width: 0;
-    height: 0;
-    border-style: solid;
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-style: solid;
 }
 
 .canvas .entity .shape[data-shape="rectangle"] {
-    content: "";
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    background-color: black;
+  content: "";
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background-color: black;
 }
 
 .canvas .entity .shape[data-shape="circle"] {
-    content: "";
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    background-color: black;
+  content: "";
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background-color: black;
 }
 
 .canvas .entity.dragging .gizmo {
-    display: none;
+  display: none;
 }
 
 .canvas .entity .rotation-handle {
-    position: absolute;
-    top: -24px;
-    right: 50%;
+  position: absolute;
+  top: -24px;
+  right: 50%;
 }
 
 .canvas .entity .rotation-handle:after {
-    display: block;
-    content: "";
-    position: absolute;
-    width: 24px;
-    height: 24px;
-    right: -12px;
-    top: -12px;
-    background: url('img/rotation-icon.svg');
-    cursor: ew-resize;
-    z-index: 999;
+  display: block;
+  content: "";
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  right: -12px;
+  top: -12px;
+  background: url('img/rotation-icon.svg');
+  cursor: ew-resize;
+  z-index: 999;
 }
 
 .canvas .entity .scale-handle {
-    position: absolute;
-    bottom: 3px;
-    right: 3px;
+  position: absolute;
+  bottom: 3px;
+  right: 3px;
 }
 
 .canvas .entity .scale-handle:after {
-    display: block;
-    content: "";
-    position: absolute;
-    width: 24px;
-    height: 24px;
-    right: -12px;
-    top: -12px;
-    background: url('/img/scale-icon.svg');
-    cursor: ew-resize;
-    z-index: 999;
+  display: block;
+  content: "";
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  right: -12px;
+  top: -12px;
+  background: url('/img/scale-icon.svg');
+  cursor: ew-resize;
+  z-index: 999;
 }
 
 
 .toggle {
-    display: flex;
-    align-items: center;
+  display: flex;
+  align-items: center;
 }
 
 .switch {
-    position: relative;
-    display: inline-block;
-    width: 62px;
-    height: 28px;
-    margin: 10px;
-    cursor: pointer;
+  position: relative;
+  display: inline-block;
+  width: 62px;
+  height: 28px;
+  margin: 10px;
+  cursor: pointer;
 }
 
 .switch .bg {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    background-color: #737373;
-    border-radius: 18px;
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background-color: #737373;
+  border-radius: 18px;
 }
 
 .switch input {
-    display: none;
+  display: none;
 }
 
 .knob {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background-color: #DEDEDE;
-    transition: all 0.1s;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: #DEDEDE;
+  transition: all 0.1s;
 }
 
 .label-on,
 .label-off {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 10px;
-    font-weight: bold;
-    color: #fff;
-    visibility: hidden;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  font-weight: bold;
+  color: #fff;
+  visibility: hidden;
 }
 
 .label-on {
-    left: 12px;
+  left: 12px;
 }
 
 .label-off {
-    left: 32px;
+  left: 32px;
 }
 
-.switch input:checked ~ .knob {
-    transform: translateX(34px);
+.switch input:checked~.knob {
+  transform: translateX(34px);
 }
 
-.switch input:checked ~ .bg {
-    background-color: #4CAF50;
+.switch input:checked~.bg {
+  background-color: #4CAF50;
 }
 
-.switch input:checked ~ .label-on {
-    visibility: visible;
+.switch input:checked~.label-on {
+  visibility: visible;
 }
 
-.switch input:not(:checked) ~ .label-off {
-    visibility: visible;
+.switch input:not(:checked)~.label-off {
+  visibility: visible;
+}
+
+
+
+@media screen and (max-width: 768px) {
+  /* Styles for devices with a screen width of up to 768px */
+
+  #editors {
+    grid-template-columns: repeat(2, 1fr);
+    /* Change the number of columns for smaller screens */
+    margin-top: 20px;
+    /* Reduce margin-top for smaller screens */
+  }
+
+  .demo {
+    flex-direction: column;
+    /* Stack demo-cards vertically on smaller screens */
+  }
+
+  .demo-card {
+    width: 100%;
+  }
+
+  .demo-card.board {
+    width: 100%;
+    /* Set the width to occupy the full width of its container */
+  }
+
+  .content {
+    min-height: 100px;
+    /* Reduce the minimum height for smaller screens */
+  }
+
+  /* Make the connection line vertical on mobile devices */
+
+  .demo .sync-button-wrapper .connection {
+    top: 0;
+    /* Adjust top position */
+    left: 50%;
+    /* Center the line horizontally */
+    width: 2px;
+    /* Make the line thin (2px width) */
+    height: 100%;
+    /* Stretch the line to fill the height of its container */
+  }
+
+  .demo .sync-button-wrapper .connection:before,
+  .demo .sync-button-wrapper .connection:after {
+    left: -3px;
+  }
+
+  .demo .sync-button-wrapper .connection:after {
+    top: 74px;
+  }
+
+  .demo .sync-button-wrapper .button,
+  .demo .sync-button-wrapper .toggle {
+    margin: 20px 0;
+  }
 }

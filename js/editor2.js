@@ -1,7 +1,6 @@
-import { element, div, span, nodeHasDataId } from "/js/utils.js"
+import { element, div } from "/js/utils.js"
 import { OpId } from "/js/crdt/opId.js"
 import { ReplicatedTreeOfBlocks } from "/js/crdt/ReplicatedTreeOfBlocks.js"
-import { EditorSegment } from "/js/editorSegment.js"
 import { ActivationOperation, CreationOperation } from "/js/crdt/operations.js"
 import { diff, NOOP, REPLACE, DELETE, INSERT } from "/js/myersDiff.js"
 
@@ -800,16 +799,6 @@ export class Editor extends EventTarget {
                     if (newBlockIsChar) {
                         let targetNode = editorEl.firstChild
                         targetNodeId = targetNode.getAttribute('data-nid')
-                        /*
-                        let targetNode = editorEl.firstChild
-                        if (!targetNode || targetNode.nodeName == 'BR') {
-                            const { newNodeEl, newNodeId } = this.#createParagraphNode()
-                            targetNode = newNodeEl
-                            targetNodeId = newNodeId
-                        } else {
-                            targetNodeId = targetNode.getAttribute('data-nid')
-                        }
-                        */
                     }
                 } else {
                     targetNodeId = this.#nodesWithBlocks[targetLeftBlockId]
@@ -1013,13 +1002,6 @@ export class Editor extends EventTarget {
 
     #editorPasteHandle(e) {
         e.preventDefault()
-
-        /*
-        let targetParentId = this.#getTargetParentIdFromSelection()
-        if (targetParentId == null) {
-            return
-        }
-        */
 
         const ops = []
 

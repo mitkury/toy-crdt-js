@@ -1,14 +1,25 @@
 <!DOCTYPE html>
 <html>
-
 <head>
-    <title>Toy Collaborative CRDT Editor</title>
+    <title>CRDTS demos</title>
     <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
-    <div id="editors"></div>
-    <script type="module" src="js/app.js"></script>
+    <article>
+      <h1>Toy Sync</h1>
+      <p>Toy Conflict-Free Replicated Data Types. <a href="https://dkury.com/toy-crdt">Here's a bit of more context</a>.</p>
+      
+      <h2>Boards</h2>
+      <div class="demo" id="board-demo"></div>
+      
+      <h2>Counter</h2>
+      <div class="demo" id="pn-counter-demo"></div>
+      
+      <h2>Growing Counter</h2>
+      <div class="demo" id="g-counter-demo"></div>
+
+      <script type="module" src="js/crdtDemos.js"></script>
+    </article>
 </body>
 
 </html>
