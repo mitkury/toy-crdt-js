@@ -1,4 +1,4 @@
-import { div } from "/js/utils.js";
+import { div } from "/toy-crdt-js/js/utils.js";
 
 export class SizeHandle extends EventTarget {
     #element;

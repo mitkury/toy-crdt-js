@@ -1,4 +1,4 @@
-import { Editor } from "/js/text/textEditor.js"
+import { Editor } from "/toy-crdt-js/js/text/textEditor.js"
 
 export class TextDemo {
     constructor(mainContainerEl) {

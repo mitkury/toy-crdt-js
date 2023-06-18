@@ -1,5 +1,5 @@
-import { ActivationOperation, CreationOperation } from "/js/crdt/operations.js"
-import { OpId } from "/js/crdt/opId.js"
+import { ActivationOperation, CreationOperation } from "/toy-crdt-js/js/crdt/operations.js"
+import { OpId } from "/toy-crdt-js/js/crdt/opId.js"
 
 /**
  * This class represents an ordered collection of blocks.

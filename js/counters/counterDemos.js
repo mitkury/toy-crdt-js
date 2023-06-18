@@ -1,6 +1,6 @@
-import { element, div, span, nodeHasDataId } from "/js/utils.js"
-import { GCounter } from "/js/counters/gcounter.js"
-import { PNCounter } from "/js/counters/pncounter.js"
+import { element, div, span, nodeHasDataId } from "/toy-crdt-js/js/utils.js"
+import { GCounter } from "/toy-crdt-js/js/counters/gcounter.js"
+import { PNCounter } from "/toy-crdt-js/js/counters/pncounter.js"
 
 class GCounterView extends EventTarget {
     #peerId

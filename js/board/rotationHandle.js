@@ -1,4 +1,4 @@
-import { element, div, span } from "/js/utils.js";
+import { element, div, span } from "/toy-crdt-js/js/utils.js";
 
 export class RotationHandle extends EventTarget {
     #parentEl

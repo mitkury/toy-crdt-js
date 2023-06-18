@@ -1,5 +1,5 @@
-import { SetPropertyOperation } from "/js/crdt/properties/operations.js"
-import { OpId } from "/js/crdt/opId.js"
+import { SetPropertyOperation } from "/toy-crdt-js/js/crdt/properties/operations.js"
+import { OpId } from "/toy-crdt-js/js/crdt/opId.js"
 
 export class ReplicatedProperties {
 

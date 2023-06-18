@@ -1,8 +1,8 @@
-import { element, div, span, nodeHasDataId } from "/js/utils.js"
-import { getRandomEmoji } from "/js/board/emojis.js"
-import { ReplicatedProperties } from "/js/crdt/properties/replicatedProperties.js"
-import { RotationHandle } from "/js/board/rotationHandle.js"
-import { SizeHandle } from "/js/board/sizeHandle.js"
+import { element, div, span, nodeHasDataId } from "/toy-crdt-js/js/utils.js"
+import { getRandomEmoji } from "/toy-crdt-js/js/board/emojis.js"
+import { ReplicatedProperties } from "/toy-crdt-js/js/crdt/properties/replicatedProperties.js"
+import { RotationHandle } from "/toy-crdt-js/js/board/rotationHandle.js"
+import { SizeHandle } from "/toy-crdt-js/js/board/sizeHandle.js"
 
 const COLORS = [
     { id: null, color: '#F40404' },   // Red

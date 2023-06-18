@@ -1,8 +1,8 @@
-import { element, div } from "/js/utils.js" 
-import { OpId } from "/js/crdt/opId.js"
-import { ReplicatedTreeOfBlocks } from "/js/crdt/replicatedTreeOfBlocks.js"
-import { ActivationOperation, CreationOperation } from "/js/crdt/operations.js"
-import { diff, NOOP, REPLACE, DELETE, INSERT } from "/js/text/myersDiff.js"
+import { element, div } from "/toy-crdt-js/js/utils.js" 
+import { OpId } from "/toy-crdt-js/js/crdt/opId.js"
+import { ReplicatedTreeOfBlocks } from "/toy-crdt-js/js/crdt/replicatedTreeOfBlocks.js"
+import { ActivationOperation, CreationOperation } from "/toy-crdt-js/js/crdt/operations.js"
+import { diff, NOOP, REPLACE, DELETE, INSERT } from "/toy-crdt-js/js/text/myersDiff.js"
 
 export class Editor extends EventTarget {
 
