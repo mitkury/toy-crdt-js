@@ -255,7 +255,7 @@ article {
   height: 100%;
   top: 0;
   left: 0;
-  background: url('/img/reset-icon.svg') no-repeat center center;
+  background: url('img/reset-icon.svg') no-repeat center center;
 }
 
 .demo-card.board .tools {
@@ -411,7 +411,7 @@ article {
   height: 24px;
   right: -12px;
   top: -12px;
-  background: url('/img/scale-icon.svg');
+  background: url('img/scale-icon.svg');
   cursor: ew-resize;
   z-index: 999;
 }
