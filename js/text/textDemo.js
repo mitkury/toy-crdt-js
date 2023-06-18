@@ -1,4 +1,4 @@
-import { Editor } from "./textEditor.js"
+import { Editor } from "/js/text/textEditor.js"
 
 export class TextDemo {
     constructor(mainContainerEl) {
